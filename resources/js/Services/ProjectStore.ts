@@ -16,7 +16,7 @@ export interface ProjectItem {
   xmlContent?: string;
 }
 
-const STORAGE_KEY = 'sheet_converter_projects_v8';
+const STORAGE_KEY = 'sheet_converter_projects_v9';
 
 // Default initial projects with accurate MusicXML content
 const initialProjects: ProjectItem[] = [
