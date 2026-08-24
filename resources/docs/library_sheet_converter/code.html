@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Thư viện dự án - Sheet Converter</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "primary-fixed": "#dbe1ff",
+                      "surface-container-highest": "#e0e3e5",
+                      "secondary-fixed": "#d5e3fc",
+                      "surface-tint": "#0053db",
+                      "sync-active-highlight": "rgba(37, 99, 235, 0.08)",
+                      "primary-fixed-dim": "#b4c5ff",
+                      "tertiary-fixed": "#ffdbcd",
+                      "error-container": "#ffdad6",
+                      "workspace-bg": "#F1F5F9",
+                      "on-secondary-fixed-variant": "#3a485b",
+                      "on-surface": "#191c1e",
+                      "on-error-container": "#93000a",
+                      "surface-container-high": "#e6e8ea",
+                      "on-tertiary-fixed": "#360f00",
+                      "background": "#f7f9fb",
+                      "tertiary-fixed-dim": "#ffb596",
+                      "on-secondary": "#ffffff",
+                      "surface-container-low": "#f2f4f6",
+                      "on-primary-fixed": "#00174b",
+                      "primary-container": "#2563eb",
+                      "border-subtle": "#E2E8F0",
+                      "omr-issue-highlight": "rgba(239, 68, 68, 0.1)",
+                      "on-secondary-container": "#57657a",
+                      "surface-dim": "#d8dadc",
+                      "tertiary": "#943700",
+                      "surface-variant": "#e0e3e5",
+                      "on-tertiary-fixed-variant": "#7d2d00",
+                      "on-primary-fixed-variant": "#003ea8",
+                      "inverse-on-surface": "#eff1f3",
+                      "outline-variant": "#c3c6d7",
+                      "secondary-container": "#d5e3fc",
+                      "inverse-surface": "#2d3133",
+                      "success": "#10B981",
+                      "primary": "#004ac6",
+                      "on-background": "#191c1e",
+                      "error": "#EF4444",
+                      "inverse-primary": "#b4c5ff",
+                      "on-primary-container": "#eeefff",
+                      "on-surface-variant": "#434655",
+                      "warning": "#F59E0B",
+                      "tertiary-container": "#bc4800",
+                      "secondary": "#515f74",
+                      "secondary-fixed-dim": "#b9c7df",
+                      "on-secondary-fixed": "#0d1c2e",
+                      "outline": "#737686",
+                      "surface-container-lowest": "#ffffff",
+                      "surface-bright": "#f7f9fb",
+                      "on-tertiary-container": "#ffede6",
+                      "surface-container": "#eceef0",
+                      "on-error": "#ffffff",
+                      "surface": "#f7f9fb",
+                      "on-tertiary": "#ffffff",
+                      "on-primary": "#ffffff"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.125rem",
+                      "lg": "0.25rem",
+                      "xl": "0.5rem",
+                      "full": "0.75rem"
+              },
+              "spacing": {
+                      "unit": "4px",
+                      "panel-padding": "12px",
+                      "margin-main": "24px",
+                      "editor-gap": "2px",
+                      "gutter-default": "16px"
+              },
+              "fontFamily": {
+                      "display-lg": [
+                              "Inter"
+                      ],
+                      "body-md": [
+                              "Inter"
+                      ],
+                      "mono-label": [
+                              "monospace"
+                      ],
+                      "headline-md": [
+                              "Inter"
+                      ],
+                      "headline-sm": [
+                              "Inter"
+                      ],
+                      "body-lg": [
+                              "Inter"
+                      ],
+                      "label-sm": [
+                              "Inter"
+                      ]
+              },
+              "fontSize": {
+                      "display-lg": [
+                              "32px",
+                              {
+                                      "lineHeight": "1.2",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "body-md": [
+                              "14px",
+                              {
+                                      "lineHeight": "1.5",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "mono-label": [
+                              "12px",
+                              {
+                                      "lineHeight": "1.2",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "headline-md": [
+                              "24px",
+                              {
+                                      "lineHeight": "1.3",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "headline-sm": [
+                              "18px",
+                              {
+                                      "lineHeight": "1.4",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "body-lg": [
+                              "16px",
+                              {
+                                      "lineHeight": "1.6",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "label-sm": [
+                              "12px",
+                              {
+                                      "lineHeight": "1.2",
+                                      "letterSpacing": "0.01em",
+                                      "fontWeight": "500"
+                              }
+                      ]
+              }
+      },
+          },
+        }
+    </script>
+</head>
+<body class="bg-workspace-bg text-on-surface font-body-md h-screen overflow-hidden flex">
+<!-- SideNavBar -->
+<nav class="bg-surface-container-lowest h-screen w-64 fixed left-0 top-0 border-r border-border-subtle flex flex-col h-full py-margin-main z-50">
+<div class="px-gutter-default mb-8">
+<h1 class="font-display-lg text-display-lg font-bold text-primary">Sheet Converter</h1>
+<p class="font-body-md text-body-md text-secondary">OMR Professional</p>
+</div>
+<ul class="flex-1 space-y-2">
+<li>
+<a class="flex items-center gap-3 px-gutter-default py-3 text-secondary hover:text-primary hover:bg-surface-container-low transition-colors font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span>Dashboard</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-gutter-default py-3 text-primary font-bold border-r-4 border-primary bg-sync-active-highlight font-body-md text-body-md" href="#" style="transform: scale(0.98); transition: transform 0.2s;">
+<span class="material-symbols-outlined" data-icon="library_music">library_music</span>
+<span>Project Library</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-gutter-default py-3 text-secondary hover:text-primary hover:bg-surface-container-low transition-colors font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span>Settings</span>
+</a>
+</li>
+</ul>
+<div class="mt-auto px-gutter-default pt-4 border-t border-border-subtle">
+<div class="flex items-center gap-3">
+<img alt="User Profile" class="w-10 h-10 rounded-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDtfCr9yQl4VcSbXOePMPPssjheUsar2zu6n7BIhrfZBtoTcsQT9Zb0j58St_aMNn0KmEesBQNi3SJhlZx8KBslSbS3Rz4BD2dVBKWsEwquBUKPPhOyJrxL4mspYMhTjBBVAODif3JZ6i6RmzAu3dz4qS8MQkkM3yTxsg-EMvC6_7kmiujp35caFisOE3iK4Cj7UAcymBiaOb1kl6NoS3EAlu6kRvZRtC-RxQjeVygjGoFaY80V1OJ1cQ"/>
+<div>
+<p class="font-label-sm text-label-sm font-semibold text-on-surface">Admin User</p>
+<p class="font-mono-label text-mono-label text-secondary">v2.4.1</p>
+</div>
+</div>
+</div>
+</nav>
+<!-- Main Content Area -->
+<main class="flex-1 ml-64 flex flex-col h-screen overflow-hidden">
+<!-- TopAppBar -->
+<header class="bg-surface-container-lowest docked full-width top-0 sticky z-40 border-b border-border-subtle flex justify-between items-center h-16 px-gutter-default shrink-0">
+<div class="flex items-center gap-4 flex-1">
+<h2 class="font-headline-md text-headline-md font-bold text-primary">Thư viện dự án</h2>
+<div class="relative ml-8 flex-1 max-w-md">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-secondary">search</span>
+<input class="w-full pl-10 pr-4 py-2 bg-surface-container-low border border-border-subtle rounded text-on-surface focus:outline-none focus:border-primary font-body-md text-body-md transition-colors" placeholder="Tìm kiếm dự án..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<button class="text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined" data-icon="help_outline">help_outline</span>
+</button>
+<button class="text-on-surface-variant hover:text-primary transition-colors relative">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+<span class="absolute top-0 right-0 w-2 h-2 bg-error rounded-full"></span>
+</button>
+<button class="bg-primary text-on-primary px-4 py-2 rounded font-label-sm text-label-sm font-semibold hover:bg-primary-fixed-dim transition-colors">
+                    Tạo mới
+                </button>
+</div>
+</header>
+<!-- Canvas -->
+<div class="flex-1 overflow-y-auto p-margin-main">
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+<!-- Project Card 1: Ready -->
+<div class="bg-surface-container-lowest border border-border-subtle rounded-lg overflow-hidden flex flex-col hover:shadow-sm transition-shadow">
+<div class="h-40 bg-surface-container-low border-b border-border-subtle relative group">
+<img class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" data-alt="A clean, high-contrast, black and white snippet of sheet music on a bright white background, typical of a modern digital engraving software. The layout is precise and corporate, with no stylistic flair, emphasizing utility and technical accuracy in a light mode SaaS environment." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBwxGZUxpTI_y3nalkufnZufjH0shrJYr9IYbTpOEpUCcsFYC0lJRhNW5jrBDDauIc6375u_fhGlvvCwsoY9PBFt_1bJ6fF_hniY7YX-wSOxPbda56duLs4CUgZ5EzCvOLHwQJ7jgvGIDPdUNWfXejdx3CELE7aL0q2JTk6uhXUPolTJZhyp5vMtFgyl38W1gsuKsxVAT5M7CAx6hOOkXgeNkSkeVccaHEWiUSi2itiCBVqGlk36ouCWw"/>
+<div class="absolute top-2 right-2 bg-success text-on-primary px-2 py-1 rounded font-mono-label text-mono-label font-semibold flex items-center gap-1 shadow-sm">
+<span class="material-symbols-outlined text-[14px]">check_circle</span> READY
+                        </div>
+</div>
+<div class="p-panel-padding flex-1 flex flex-col">
+<h3 class="font-headline-sm text-headline-sm text-on-surface mb-1 truncate">001 Hỡi Thánh Vương, Kíp Ngự Lai</h3>
+<p class="font-label-sm text-label-sm text-secondary mb-4 flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">calendar_today</span> 12/10/2023
+                        </p>
+<div class="mt-auto flex justify-between items-center border-t border-border-subtle pt-3">
+<button class="text-primary hover:text-primary-fixed-dim font-label-sm text-label-sm font-semibold transition-colors">OPEN</button>
+<div class="flex gap-2">
+<button class="text-secondary hover:text-on-surface transition-colors" title="Export">
+<span class="material-symbols-outlined text-[20px]">download</span>
+</button>
+<button class="text-secondary hover:text-error transition-colors" title="Delete">
+<span class="material-symbols-outlined text-[20px]">delete</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Project Card 2: Needs Review -->
+<div class="bg-surface-container-lowest border border-border-subtle rounded-lg overflow-hidden flex flex-col hover:shadow-sm transition-shadow">
+<div class="h-40 bg-surface-container-low border-b border-border-subtle relative group">
+<img class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" data-alt="A detailed view of classical sheet music with subtle red bounding boxes highlighting potential Optical Music Recognition errors. The image is rendered in a clean, modern workspace aesthetic, high key lighting, solid white background, corporate SaaS style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCNzMUxPtMpyFdSQ3Sob7WZSQt02tVNUx744ZvcEBKL7LhfRMkP1ut__ijvn45iLNT0eCA5vGLbk4sJSRiLbE2mRN4uDntHHhAQYxhWj2fZHnI1j6XQpWjpcuObHQiwLHsztaMNEXNJe0A0pOkXwUXey3hb4Ao5cA05tVlSVn1-SPuI4xnWUdbjLzcNm7aB3n4Kd9yOTRxJhDKgSr93mvHnPrLlDFQaI0owdKjiDZgyx_vGeB4lX_nDXQ"/>
+<div class="absolute top-2 right-2 bg-warning text-on-background px-2 py-1 rounded font-mono-label text-mono-label font-semibold flex items-center gap-1 shadow-sm">
+<span class="material-symbols-outlined text-[14px]">error_outline</span> NEEDS REVIEW
+                        </div>
+</div>
+<div class="p-panel-padding flex-1 flex flex-col">
+<h3 class="font-headline-sm text-headline-sm text-on-surface mb-1 truncate">045 Chúa Chăn Nuôi Tôi</h3>
+<p class="font-label-sm text-label-sm text-secondary mb-4 flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">calendar_today</span> 11/10/2023
+                        </p>
+<div class="mt-auto flex justify-between items-center border-t border-border-subtle pt-3">
+<button class="text-primary hover:text-primary-fixed-dim font-label-sm text-label-sm font-semibold transition-colors">REVIEW</button>
+<div class="flex gap-2">
+<button class="text-secondary hover:text-on-surface transition-colors" title="Export">
+<span class="material-symbols-outlined text-[20px]">download</span>
+</button>
+<button class="text-secondary hover:text-error transition-colors" title="Delete">
+<span class="material-symbols-outlined text-[20px]">delete</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Project Card 3: Processing -->
+<div class="bg-surface-container-lowest border border-border-subtle rounded-lg overflow-hidden flex flex-col hover:shadow-sm transition-shadow opacity-70">
+<div class="h-40 bg-surface-container-high border-b border-border-subtle relative flex items-center justify-center">
+<span class="material-symbols-outlined text-[48px] text-secondary animate-pulse">document_scanner</span>
+<div class="absolute top-2 right-2 bg-surface-tint text-on-primary px-2 py-1 rounded font-mono-label text-mono-label font-semibold flex items-center gap-1 shadow-sm">
+<span class="material-symbols-outlined text-[14px] animate-spin">sync</span> PROCESSING
+                        </div>
+</div>
+<div class="p-panel-padding flex-1 flex flex-col">
+<h3 class="font-headline-sm text-headline-sm text-on-surface mb-1 truncate">089 Tâm Hồn Chúc Tụng</h3>
+<p class="font-label-sm text-label-sm text-secondary mb-4 flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">calendar_today</span> 12/10/2023
+                        </p>
+<div class="mt-auto flex justify-between items-center border-t border-border-subtle pt-3">
+<div class="w-full bg-surface-container-high rounded-full h-1.5 mt-2 overflow-hidden">
+<div class="bg-primary h-1.5 rounded-full" style="width: 45%"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- Project Card 4: Ready -->
+<div class="bg-surface-container-lowest border border-border-subtle rounded-lg overflow-hidden flex flex-col hover:shadow-sm transition-shadow">
+<div class="h-40 bg-surface-container-low border-b border-border-subtle relative group">
+<img class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" data-alt="A crisp, high-resolution rendering of vocal choir sheet music on a stark white digital canvas. The aesthetic is strictly utilitarian and modern, characteristic of professional notation software in a well-lit, corporate development environment." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAdNCtaL3dHXLVwvH9cQxjZ70EKpjuAqYzims5Z8CKd2st5md6U5yWzxu--WHrH15Q2AqsAt5RrZUNVx8X2EHqzVLLy7x1mlxoMwNYEUMkUlGVDbBUm28HHZ0DLzvQ51lyNaGbrohtW8E1dx9fxEItUm7QHWVvyQzxv1T7zYhHCKpGFHqfpoL8Yw8hElBR0mdvTwb64xkyal5nOjy3rt4NgwppppcpVEyzKfE4OeyDkJheNshQ_MEZkHg"/>
+<div class="absolute top-2 right-2 bg-success text-on-primary px-2 py-1 rounded font-mono-label text-mono-label font-semibold flex items-center gap-1 shadow-sm">
+<span class="material-symbols-outlined text-[14px]">check_circle</span> READY
+                        </div>
+</div>
+<div class="p-panel-padding flex-1 flex flex-col">
+<h3 class="font-headline-sm text-headline-sm text-on-surface mb-1 truncate">112 Nguyện Danh Chúa Cả Sáng</h3>
+<p class="font-label-sm text-label-sm text-secondary mb-4 flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">calendar_today</span> 10/10/2023
+                        </p>
+<div class="mt-auto flex justify-between items-center border-t border-border-subtle pt-3">
+<button class="text-primary hover:text-primary-fixed-dim font-label-sm text-label-sm font-semibold transition-colors">OPEN</button>
+<div class="flex gap-2">
+<button class="text-secondary hover:text-on-surface transition-colors" title="Export">
+<span class="material-symbols-outlined text-[20px]">download</span>
+</button>
+<button class="text-secondary hover:text-error transition-colors" title="Delete">
+<span class="material-symbols-outlined text-[20px]">delete</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</body></html>

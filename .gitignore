@@ -1,0 +1,40 @@
+# Dependencies
+/node_modules
+/vendor
+
+# Build outputs
+/dist
+/public/build
+/public/hot
+
+# Storage & Temporary files
+/storage/projects/*
+!/storage/projects/.gitkeep
+/storage/exports/*
+!/storage/exports/.gitkeep
+/storage/cache/*
+!/storage/cache/.gitkeep
+/storage/logs/*.log
+
+# Environment & IDE
+.env
+.env.backup
+.env.production
+.phpunit.result.cache
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/

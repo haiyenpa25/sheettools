@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+
+<html lang="vi"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Sheet Converter - Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "primary-fixed": "#dbe1ff",
+                        "surface-container-highest": "#e0e3e5",
+                        "secondary-fixed": "#d5e3fc",
+                        "surface-tint": "#0053db",
+                        "sync-active-highlight": "rgba(37, 99, 235, 0.08)",
+                        "primary-fixed-dim": "#b4c5ff",
+                        "tertiary-fixed": "#ffdbcd",
+                        "error-container": "#ffdad6",
+                        "workspace-bg": "#F1F5F9",
+                        "on-secondary-fixed-variant": "#3a485b",
+                        "on-surface": "#191c1e",
+                        "on-error-container": "#93000a",
+                        "surface-container-high": "#e6e8ea",
+                        "on-tertiary-fixed": "#360f00",
+                        "background": "#f7f9fb",
+                        "tertiary-fixed-dim": "#ffb596",
+                        "on-secondary": "#ffffff",
+                        "surface-container-low": "#f2f4f6",
+                        "on-primary-fixed": "#00174b",
+                        "primary-container": "#2563eb",
+                        "border-subtle": "#E2E8F0",
+                        "omr-issue-highlight": "rgba(239, 68, 68, 0.1)",
+                        "on-secondary-container": "#57657a",
+                        "surface-dim": "#d8dadc",
+                        "tertiary": "#943700",
+                        "surface-variant": "#e0e3e5",
+                        "on-tertiary-fixed-variant": "#7d2d00",
+                        "on-primary-fixed-variant": "#003ea8",
+                        "inverse-on-surface": "#eff1f3",
+                        "outline-variant": "#c3c6d7",
+                        "secondary-container": "#d5e3fc",
+                        "inverse-surface": "#2d3133",
+                        "success": "#10B981",
+                        "primary": "#004ac6",
+                        "on-background": "#191c1e",
+                        "error": "#EF4444",
+                        "inverse-primary": "#b4c5ff",
+                        "on-primary-container": "#eeefff",
+                        "on-surface-variant": "#434655",
+                        "warning": "#F59E0B",
+                        "tertiary-container": "#bc4800",
+                        "secondary": "#515f74",
+                        "secondary-fixed-dim": "#b9c7df",
+                        "on-secondary-fixed": "#0d1c2e",
+                        "outline": "#737686",
+                        "surface-container-lowest": "#ffffff",
+                        "surface-bright": "#f7f9fb",
+                        "on-tertiary-container": "#ffede6",
+                        "surface-container": "#eceef0",
+                        "on-error": "#ffffff",
+                        "surface": "#f7f9fb",
+                        "on-tertiary": "#ffffff",
+                        "on-primary": "#ffffff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "unit": "4px",
+                        "panel-padding": "12px",
+                        "margin-main": "24px",
+                        "editor-gap": "2px",
+                        "gutter-default": "16px"
+                    },
+                    "fontFamily": {
+                        "display-lg": ["Inter"],
+                        "body-md": ["Inter"],
+                        "mono-label": ["monospace"],
+                        "headline-md": ["Inter"],
+                        "headline-sm": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "label-sm": ["Inter"]
+                    },
+                    "fontSize": {
+                        "display-lg": ["32px", { "lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "body-md": ["14px", { "lineHeight": "1.5", "fontWeight": "400" }],
+                        "mono-label": ["12px", { "lineHeight": "1.2", "fontWeight": "400" }],
+                        "headline-md": ["24px", { "lineHeight": "1.3", "fontWeight": "600" }],
+                        "headline-sm": ["18px", { "lineHeight": "1.4", "fontWeight": "600" }],
+                        "body-lg": ["16px", { "lineHeight": "1.6", "fontWeight": "400" }],
+                        "label-sm": ["12px", { "lineHeight": "1.2", "letterSpacing": "0.01em", "fontWeight": "500" }]
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-workspace-bg text-on-background font-body-md h-screen overflow-hidden flex">
+<!-- SideNavBar -->
+<nav class="h-screen w-64 fixed left-0 top-0 bg-surface-container-lowest border-r border-border-subtle flex flex-col py-margin-main z-50">
+<div class="px-gutter-default mb-8">
+<h1 class="font-display-lg text-display-lg font-bold text-primary">Sheet Converter</h1>
+<p class="font-label-sm text-label-sm text-secondary mt-1">OMR Professional</p>
+</div>
+<ul class="flex flex-col gap-unit px-panel-padding">
+<li>
+<a class="flex items-center gap-3 px-3 py-2 rounded font-body-md text-primary font-bold border-r-4 border-primary bg-sync-active-highlight scale-[0.98] transition-transform" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">dashboard</span>
+                    Dashboard
+                </a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-3 py-2 rounded font-body-md text-secondary hover:text-primary hover:bg-surface-container-low transition-colors" href="#">
+<span class="material-symbols-outlined">library_music</span>
+                    Project Library
+                </a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-3 py-2 rounded font-body-md text-secondary hover:text-primary hover:bg-surface-container-low transition-colors" href="#">
+<span class="material-symbols-outlined">settings</span>
+                    Settings
+                </a>
+</li>
+</ul>
+<div class="mt-auto px-gutter-default flex items-center gap-3">
+<img alt="User Profile" class="w-10 h-10 rounded-full object-cover border border-border-subtle" data-alt="A clean, professional headshot of a user, soft lighting, neutral background, suitable for a corporate SaaS avatar, modern and approachable, high resolution." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA0hFQI37dZIc2DX_OBPPeZFYpmzhm3-2eXg_QRqUYR54We5WATPTch0NsqsPkAjPDigXlsnxkIBZK9ykMkjkXmAG6w0u8L9kTDs3pZ73779o-hNojiVghe3V_pxb7ziiuKcGy2uaDDymjAEZcdG2vt--3HLZfrEjsgITTXzEJLTxM7IcECiGZwR2qky938wJhYziRMKfScAE4Pf9868V_rylNcjjjbXlnMWCD4ync1cVYfZcX1GurWJg"/>
+<div>
+<p class="font-label-sm text-label-sm text-on-surface font-semibold">User</p>
+<p class="font-label-sm text-label-sm text-secondary">Pro Plan</p>
+</div>
+</div>
+</nav>
+<!-- Main Content Area -->
+<div class="ml-64 flex-1 flex flex-col h-full">
+<!-- TopAppBar -->
+<header class="bg-surface-container-lowest docked full-width top-0 sticky z-40 border-b border-border-subtle flex justify-between items-center h-16 px-gutter-default">
+<div class="flex items-center gap-6">
+<!-- Nav structure from JSON mapped to standard header if needed, but side nav handles primary nav here -->
+<span class="font-headline-sm text-headline-sm text-on-surface font-semibold">Dashboard</span>
+</div>
+<div class="flex items-center gap-4">
+<button class="text-on-surface-variant hover:text-primary transition-colors active:opacity-80">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="text-on-surface-variant hover:text-primary transition-colors active:opacity-80">
+<span class="material-symbols-outlined">help_outline</span>
+</button>
+<button class="bg-primary text-on-primary px-4 py-1.5 rounded font-label-sm text-label-sm font-semibold hover:bg-on-primary-fixed-variant transition-colors">
+                    Export
+                </button>
+</div>
+</header>
+<!-- Scrollable Dashboard Content -->
+<main class="flex-1 overflow-y-auto p-margin-main">
+<div class="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-margin-main">
+<!-- Main Upload Area -->
+<div class="lg:col-span-2 space-y-margin-main">
+<section class="bg-surface-container-lowest rounded-xl border border-border-subtle p-margin-main">
+<h2 class="font-headline-sm text-headline-sm text-on-surface mb-6">Tải lên bản nhạc</h2>
+<div class="border-2 border-dashed border-outline-variant rounded-xl p-12 flex flex-col items-center justify-center text-center hover:bg-surface-container-low transition-colors cursor-pointer group">
+<div class="w-16 h-16 bg-surface-container-high rounded-full flex items-center justify-center mb-4 group-hover:bg-primary-fixed transition-colors">
+<span class="material-symbols-outlined text-3xl text-secondary group-hover:text-primary transition-colors">cloud_upload</span>
+</div>
+<p class="font-body-lg text-body-lg text-on-surface font-semibold mb-2">Kéo thả file PDF hoặc ảnh vào đây</p>
+<p class="font-body-md text-body-md text-secondary mb-6">Hỗ trợ định dạng: PDF, PNG, JPG, TIFF (Tối đa 50MB)</p>
+<button class="bg-primary text-on-primary px-6 py-2.5 rounded font-label-sm text-label-sm font-semibold hover:bg-on-primary-fixed-variant transition-colors shadow-sm">
+                                Chọn file từ máy tính
+                            </button>
+</div>
+</section>
+<!-- Recent Projects -->
+<section>
+<div class="flex justify-between items-center mb-4">
+<h2 class="font-headline-sm text-headline-sm text-on-surface">Dự án gần đây</h2>
+<a class="font-label-sm text-label-sm text-primary hover:underline" href="#">Xem tất cả</a>
+</div>
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+<!-- Project Card 1 -->
+<div class="bg-surface-container-lowest border border-border-subtle rounded-lg p-panel-padding hover:border-primary-fixed hover:shadow-sm transition-all cursor-pointer flex gap-4">
+<div class="w-16 h-20 bg-surface-container-low rounded border border-border-subtle flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-secondary">description</span>
+</div>
+<div class="flex flex-col justify-center flex-1">
+<h3 class="font-body-md text-body-md font-semibold text-on-surface truncate">Chopin_Nocturne_Op9_No2.pdf</h3>
+<p class="font-label-sm text-label-sm text-secondary mt-1">Đã xử lý xong • 2 giờ trước</p>
+<div class="mt-2">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-success/10 text-success border border-success/20">
+                                            READY
+                                        </span>
+</div>
+</div>
+</div>
+<!-- Project Card 2 -->
+<div class="bg-surface-container-lowest border border-border-subtle rounded-lg p-panel-padding hover:border-primary-fixed hover:shadow-sm transition-all cursor-pointer flex gap-4">
+<div class="w-16 h-20 bg-surface-container-low rounded border border-border-subtle flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-secondary">image</span>
+</div>
+<div class="flex flex-col justify-center flex-1">
+<h3 class="font-body-md text-body-md font-semibold text-on-surface truncate">Vietnamese_Folk_Song_Scan.png</h3>
+<p class="font-label-sm text-label-sm text-secondary mt-1">Cần xem lại • Hôm qua</p>
+<div class="mt-2">
+<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-warning/10 text-warning border border-warning/20">
+                                            NEEDS_REVIEW
+                                        </span>
+</div>
+</div>
+</div>
+</div>
+</section>
+</div>
+<!-- Right Sidebar: Configuration -->
+<div class="lg:col-span-1">
+<section class="bg-surface-container-lowest rounded-xl border border-border-subtle p-margin-main sticky top-0">
+<h2 class="font-headline-sm text-headline-sm text-on-surface mb-6 flex items-center gap-2">
+<span class="material-symbols-outlined text-secondary">tune</span>
+                            Cấu hình nhận dạng
+                        </h2>
+<form class="space-y-6">
+<!-- OMR Engine -->
+<div>
+<label class="block font-label-sm text-label-sm text-on-surface font-semibold mb-2">OMR Engine</label>
+<select class="w-full border border-border-subtle rounded bg-surface-container-lowest px-3 py-2 font-body-md text-body-md focus:border-primary focus:ring-1 focus:ring-primary outline-none">
+<option selected="" value="audiveris">Audiveris (Default)</option>
+<option value="oemer">Oemer</option>
+</select>
+</div>
+<!-- OCR Language -->
+<div>
+<label class="block font-label-sm text-label-sm text-on-surface font-semibold mb-2">OCR Language</label>
+<div class="space-y-2">
+<label class="flex items-center gap-2 cursor-pointer">
+<input checked="" class="rounded border-border-subtle text-primary focus:ring-primary w-4 h-4" type="checkbox"/>
+<span class="font-body-md text-body-md text-on-surface">Vietnamese (Tiếng Việt)</span>
+</label>
+<label class="flex items-center gap-2 cursor-pointer">
+<input checked="" class="rounded border-border-subtle text-primary focus:ring-primary w-4 h-4" type="checkbox"/>
+<span class="font-body-md text-body-md text-on-surface">English</span>
+</label>
+<label class="flex items-center gap-2 cursor-pointer opacity-60">
+<input class="rounded border-border-subtle text-primary focus:ring-primary w-4 h-4" type="checkbox"/>
+<span class="font-body-md text-body-md text-on-surface">French</span>
+</label>
+</div>
+</div>
+<hr class="border-border-subtle"/>
+<!-- Toggles -->
+<div class="space-y-4">
+<div class="flex items-center justify-between">
+<div>
+<p class="font-label-sm text-label-sm text-on-surface font-semibold">Recognize Lyrics</p>
+<p class="font-mono-label text-mono-label text-secondary mt-0.5">Extract text below staves</p>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" type="checkbox" value=""/>
+<div class="w-9 h-5 bg-surface-container-high peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</div>
+<div class="flex items-center justify-between">
+<div>
+<p class="font-label-sm text-label-sm text-on-surface font-semibold">Recognize Chords</p>
+<p class="font-mono-label text-mono-label text-secondary mt-0.5">Detect chord symbols above</p>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" type="checkbox" value=""/>
+<div class="w-9 h-5 bg-surface-container-high peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</div>
+</div>
+<div class="pt-4">
+<button class="w-full bg-primary-fixed text-on-primary-fixed px-4 py-2 rounded font-label-sm text-label-sm font-semibold hover:bg-primary-fixed-dim transition-colors flex justify-center items-center gap-2" type="button">
+<span class="material-symbols-outlined" style="font-size: 18px;">save</span>
+                                    Lưu cấu hình mặc định
+                                </button>
+</div>
+</form>
+</section>
+</div>
+</div>
+</main>
+</div>
+</body></html>
