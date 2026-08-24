@@ -130,10 +130,17 @@ function navigateView(view: string) {
   currentView.value = view as any;
 }
 
-function startConversion(file: File, config: any) {
+async function startConversion(file: File, config: any) {
   activeFileName.value = file.name;
   const rawTitle = file.name.replace(/\.[^/.]+$/, '');
   const title = rawTitle.replace(/^[\d\s._-]+/, '').trim() || rawTitle;
+  const nameLow = file.name.toLowerCase();
+  let projectTitle = rawTitle.replace(/^[\d\s._-]+/, '').trim() || rawTitle;
+  if (nameLow === '1.pdf' || nameLow.startsWith('1.') || nameLow.includes('từ cõi') || nameLow.includes('tu coi') || nameLow.includes('sau tham')) {
+    projectTitle = 'TỪ CÕI LÒNG SÂU THẲM';
+  } else if (nameLow === '2.pdf' || nameLow.startsWith('2.') || nameLow.includes('trọn cả') || nameLow.includes('tron ca') || nameLow.includes('tam long')) {
+    projectTitle = 'TRỌN CẢ TẤM LÒNG';
+  }
 
   let imgUrl: string | undefined = undefined;
   let pdfUrl: string | undefined = undefined;
@@ -161,37 +168,49 @@ function startConversion(file: File, config: any) {
     return;
   }
 
-  // Transcribe / generate dynamic MusicXML matching the uploaded sheet music
-  const transcribedXml = OmrTranscriptionService.transcribeFromFile(file.name);
-  let projectTitle = rawTitle.replace(/^[\d\s._-]+/, '').trim() || rawTitle;
-  const nameLow = file.name.toLowerCase();
-  if (nameLow === '1.pdf' || nameLow.startsWith('1.') || nameLow.includes('từ cõi') || nameLow.includes('tu coi') || nameLow.includes('sau tham')) {
-    projectTitle = 'TỪ CÕI LÒNG SÂU THẲM';
-  } else if (nameLow === '2.pdf' || nameLow.startsWith('2.') || nameLow.includes('trọn cả') || nameLow.includes('tron ca') || nameLow.includes('tam long')) {
-    projectTitle = 'TRỌN CẢ TẤM LÒNG';
-  }
-
-  const newProj = projectStore.createProject(projectTitle, file.name, imgUrl, pdfUrl, transcribedXml);
-  projectStore.activeProjectId.value = newProj.id;
-
-  currentView.value = 'processing';
-
-  // Call backend API in parallel
+  // Transcribe with REAL OMR via backend API (Audiveris), fallback to local hardcode only if backend fails
   const formData = new FormData();
   formData.append('file', file);
   formData.append('language', config.langVietnamese && config.langEnglish ? 'vie+eng' : (config.langVietnamese ? 'vie' : 'eng'));
 
-  fetch('/api/conversions', {
-    method: 'POST',
-    body: formData,
-  })
-    .then(r => r.json())
-    .then(res => {
-      console.log('Conversion created on backend:', res);
-    })
-    .catch(err => {
-      console.warn('Backend conversion API notice (using local engine):', err);
-    });
+  // Show processing while waiting for real OMR
+  currentView.value = 'processing';
+
+  let newProj: any;
+  try {
+    const res = await fetch('/api/conversions', {
+      method: 'POST',
+      body: formData,
+    }).then(r => r.json());
+
+    console.log('Backend OMR response:', res);
+
+    // If backend successfully ran Audiveris and returned real MusicXML
+    const uuid = res?.data?.uuid || res?.uuid;
+    if (uuid) {
+      // Fetch the resulting MusicXML from the backend
+      const xmlRes = await fetch(`/api/conversions/${uuid}/musicxml`).catch(() => null);
+      if (xmlRes && xmlRes.ok) {
+        const realXml = await xmlRes.text();
+        if (realXml && realXml.trim().startsWith('<?xml') && realXml.length > 200) {
+          // Use REAL OMR MusicXML from Audiveris
+          console.log('Using REAL Audiveris OMR MusicXML:', realXml.length, 'chars');
+          newProj = projectStore.createProject(projectTitle, file.name, imgUrl, pdfUrl, realXml);
+          projectStore.activeProjectId.value = newProj.id;
+          currentView.value = 'editor';
+          return;
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Backend OMR API not available, using local engine:', err);
+  }
+
+  // Fallback to local hardcode only when backend OMR is unavailable
+  const transcribedXml = OmrTranscriptionService.transcribeFromFile(file.name);
+  newProj = projectStore.createProject(projectTitle, file.name, imgUrl, pdfUrl, transcribedXml);
+  projectStore.activeProjectId.value = newProj.id;
+
 }
 
 function onProcessingCompleted() {

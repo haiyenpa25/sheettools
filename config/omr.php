@@ -22,6 +22,7 @@ return [
 
     'java_bin' => env('JAVA_BIN', 'java'),
     'audiveris_jar' => env('AUDIVERIS_JAR', 'C:\\Program Files\\Audiveris\\app\\audiveris.jar'),
+    'audiveris_exe' => env('AUDIVERIS_EXE', 'D:\\tools\\audiveris\\install\\Audiveris\\Audiveris.exe'),
     'tessdata_path' => env('TESSDATA_PREFIX', 'C:\\Program Files\\Tesseract-OCR\\tessdata'),
     'tesseract_bin' => env('TESSERACT_BIN', 'tesseract'),
     'python_bin' => env('PYTHON_BIN', 'python'),
