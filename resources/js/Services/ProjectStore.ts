@@ -16,20 +16,45 @@ export interface ProjectItem {
   xmlContent?: string;
 }
 
-const STORAGE_KEY = 'sheet_converter_projects_v4';
+const STORAGE_KEY = 'sheet_converter_projects_v7';
 
 // Default initial projects with accurate MusicXML content
 const initialProjects: ProjectItem[] = [
   {
+    id: 'p_002',
+    title: 'TRỌN CẢ TẤM LÒNG',
+    composer: 'Tôn Vinh Chúa Hằng Hữu',
+    date: '24/08/2026',
+    status: 'READY',
+    verses: 2,
+    keySig: 'G Major',
+    timeSig: '4/4',
+    sourceFilename: '2.pdf',
+    xmlContent: OmrTranscriptionService.generateTronCaTamLong(),
+  },
+  {
     id: 'p_001',
-    title: '001 Hỡi Thánh Vương, Kíp Ngự Lai',
-    composer: 'Felice de Giardini, 1769',
+    title: 'TỪ CÕI LÒNG SÂU THẲM',
+    composer: 'Nguyễn Đình Tiến',
+    date: '24/08/2026',
+    status: 'READY',
+    verses: 1,
+    keySig: 'E minor / G Major',
+    timeSig: '2/4',
+    sourceFilename: '1.pdf',
+    xmlContent: OmrTranscriptionService.generateTuCoiLongSauTham(),
+  },
+  {
+    id: 'p_doxology',
+    title: 'TÔN VINH CHÂN THẦN',
+    composer: 'Louis Bourgeois, 1551',
     date: '12/10/2023',
     status: 'READY',
     verses: 4,
     keySig: 'G Major',
-    timeSig: '3/4',
+    timeSig: '4/4',
     sourceFilename: '001 Hỡi Thánh Vương, Kíp Ngự Lai.pdf',
+    xmlContent: OmrTranscriptionService.generateTonVinhChanThan(),
   },
   {
     id: 'p_045',
@@ -55,23 +80,11 @@ const initialProjects: ProjectItem[] = [
     sourceFilename: '089_Tam_Hon_Chuc_Tung.jpg',
     xmlContent: OmrTranscriptionService.generateTamHonChucTung(),
   },
-  {
-    id: 'p_112',
-    title: '112 Nguyện Danh Chúa Cả Sáng',
-    composer: 'Lowell Mason',
-    date: '10/10/2023',
-    status: 'READY',
-    verses: 5,
-    keySig: 'D Major',
-    timeSig: '3/4',
-    sourceFilename: '112_Nguyen_Danh_Chua.pdf',
-    xmlContent: OmrTranscriptionService.generateDynamicHymnStructure('112 Nguyện Danh Chúa Cả Sáng', 3, 4, 2, 16),
-  },
 ];
 
 class ProjectStore {
   public projects = reactive<ProjectItem[]>([]);
-  public activeProjectId = ref<string>('p_001');
+  public activeProjectId = ref<string>('p_002');
 
   constructor() {
     this.loadFromStorage();
@@ -122,9 +135,9 @@ class ProjectStore {
       composer: 'Tác giả bài hát',
       date: dateStr,
       status: 'READY',
-      verses: 4,
+      verses: 2,
       keySig: 'G Major',
-      timeSig: '3/4',
+      timeSig: '4/4',
       sourceFilename: filename,
       sourceImageUrl,
       sourcePdfUrl,
