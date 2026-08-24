@@ -5,17 +5,18 @@ declare(strict_types=1);
 namespace App\Contracts;
 
 use App\DTOs\ConversionInputDto;
+use App\DTOs\OmrResultDto;
 
 /**
- * Interface cho các OMR Engine (Audiveris, etc.)
+ * Interface cho các OMR Engine (Audiveris, Oemer, etc.)
  */
 interface OmrEngineInterface
 {
     /**
-     * Nhận dạng bản nhạc từ file đầu vào
+     * Nhận dạng bản nhạc từ file đầu vào và trả về kết quả quét artifact thực tế.
      *
      * @param ConversionInputDto $input
-     * @return array{success: bool, rawMusicXmlPath: string, omrFilePath: string, logs: string}
+     * @return OmrResultDto
      */
-    public function transcribe(ConversionInputDto $input): array;
+    public function transcribe(ConversionInputDto $input): OmrResultDto;
 }

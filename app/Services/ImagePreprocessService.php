@@ -9,7 +9,7 @@ require_once __DIR__ . '/StorageService.php';
 use App\Services\StorageService;
 
 /**
- * Service tiền xử lý hình ảnh và tách trang từ PDF
+ * Service tiền xử lý hình ảnh và tách trang từ PDF phục vụ OMR
  */
 class ImagePreprocessService
 {
@@ -21,12 +21,12 @@ class ImagePreprocessService
     }
 
     /**
-     * Tách trang PDF hoặc xử lý ảnh đơn và tiền xử lý qua OpenCV
+     * Tách trang PDF hoặc xử lý ảnh đơn và tiền xử lý qua pipeline
      *
      * @param string $uuid
      * @param string $sourceFilePath
-     * @param string $sourceType 'pdf' | 'png' | 'jpg'
-     * @return array<int, string> Danh sách đường dẫn ảnh các trang đã sẵn sàng
+     * @param string $sourceType 'pdf' | 'png' | 'jpg' | 'jpeg'
+     * @return array<int, string> Danh sách đường dẫn tuyệt đối các trang ảnh
      */
     public function processSource(string $uuid, string $sourceFilePath, string $sourceType): array
     {
@@ -35,19 +35,17 @@ class ImagePreprocessService
             mkdir($pagesDir, 0755, true);
         }
 
-        $pageImages = [];
+        $sourceType = strtolower($sourceType);
 
-        if (strtolower($sourceType) === 'pdf') {
-            // Tách trang PDF bằng Python hoặc pdftoppm nếu có
-            $pageImages = $this->extractPdfPages($sourceFilePath, $pagesDir);
-        } else {
-            // Ảnh đơn (PNG/JPG): Sao chép vào trang 1
-            $targetPage1 = $pagesDir . DIRECTORY_SEPARATOR . 'page-001.png';
-            $this->runOpenCvPipeline($sourceFilePath, $targetPage1);
-            $pageImages[] = $targetPage1;
+        if ($sourceType === 'pdf') {
+            return $this->extractPdfPages($sourceFilePath, $pagesDir);
         }
 
-        return $pageImages;
+        // Ảnh đơn (PNG/JPG): Lưu vào trang 1
+        $targetPage1 = $pagesDir . DIRECTORY_SEPARATOR . 'page-001.png';
+        $this->runOpenCvPipeline($sourceFilePath, $targetPage1);
+        
+        return [$targetPage1];
     }
 
     protected function runOpenCvPipeline(string $inputPath, string $outputPath): bool
@@ -64,7 +62,7 @@ class ImagePreprocessService
         $exitCode = 0;
         @exec($cmd, $output, $exitCode);
 
-        // Nếu OpenCV chạy thành công thì xong, nếu chưa cài OpenCV thì fallback copy trực tiếp
+        // Nếu OpenCV pipeline không khả dụng, sao chép nguyên bản
         if ($exitCode !== 0 || !file_exists($outputPath)) {
             copy($inputPath, $outputPath);
         }
@@ -72,33 +70,38 @@ class ImagePreprocessService
         return file_exists($outputPath);
     }
 
+    /**
+     * Trích xuất toàn bộ các trang PDF thành ảnh PNG 300 DPI bằng Python worker
+     *
+     * @param string $pdfPath
+     * @param string $pagesDir
+     * @return array<int, string>
+     * @throws \RuntimeException Khi không thể trích xuất PDF
+     */
     protected function extractPdfPages(string $pdfPath, string $pagesDir): array
     {
-        // Fallback: Tạo ít nhất 1 ảnh đại diện hoặc dùng pdftoppm/Python
-        $page1 = $pagesDir . DIRECTORY_SEPARATOR . 'page-001.png';
+        $scriptPath = dirname(__DIR__, 2) . '/workers/preprocessing/extract_pdf.py';
         
-        // Thử chạy python script nếu có PyMuPDF / pdf2image
-        $pyExtract = sprintf(
-            'python -c "import fitz; doc=fitz.open(%s); page=doc.load_page(0); pix=page.get_pixmap(); pix.save(%s)" 2>&1',
+        $cmd = sprintf(
+            'python %s --input %s --output-dir %s --dpi 300 2>&1',
+            escapeshellarg($scriptPath),
             escapeshellarg($pdfPath),
-            escapeshellarg($page1)
+            escapeshellarg($pagesDir)
         );
-        @exec($pyExtract);
 
-        if (!file_exists($page1)) {
-            if (function_exists('imagecreatetruecolor')) {
-                $im = imagecreatetruecolor(800, 1100);
-                $white = imagecolorallocate($im, 255, 255, 255);
-                imagefill($im, 0, 0, $white);
-                imagepng($im, $page1);
-                imagedestroy($im);
-            } else {
-                // Minimal 1x1 white PNG base64
-                $minimalPng = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=');
-                file_put_contents($page1, $minimalPng);
-            }
+        $output = [];
+        $exitCode = 0;
+        @exec($cmd, $output, $exitCode);
+
+        $rawOutput = implode("\n", $output);
+        $json = json_decode($rawOutput, true);
+
+        if ($exitCode === 0 && is_array($json) && !empty($json['success']) && !empty($json['pages'])) {
+            return $json['pages'];
         }
 
-        return [$page1];
+        // Nếu có lỗi, fail loudly không dùng ảnh trắng giả
+        $errorDetail = is_array($json) && isset($json['error']) ? $json['error'] : $rawOutput;
+        throw new \RuntimeException("Failed to extract pages from PDF '{$pdfPath}': {$errorDetail}");
     }
 }

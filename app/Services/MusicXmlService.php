@@ -102,10 +102,6 @@ class MusicXmlService
                     // Xây dựng displayText
                     $display = $rootStep;
                     if ($rootAlter === '1') $display .= '#';
-                    if ($rootAlter === '-1') $display .= 'b';
-                    if ($kind !== 'major') $display .= $kindText;
-                    if ($bassStep) $display .= '/' . $bassStep;
-
                     $harmonies[] = new HarmonyDto(
                         id: uniqid('harm_'),
                         partId: $partId,
@@ -123,5 +119,43 @@ class MusicXmlService
         }
 
         return $harmonies;
+    }
+
+    /**
+     * Trích xuất thông tin tiêu đề, tác giả từ MusicXML
+     */
+    public function extractMetadata(string $xmlContent): array
+    {
+        $xml = @simplexml_load_string($xmlContent);
+        if (!$xml) {
+            return [
+                'title' => '',
+                'composer' => '',
+                'lyricist' => '',
+                'tempo' => 100,
+            ];
+        }
+
+        $title = (string)($xml->{'movement-title'} ?? ($xml->work->{'work-title'} ?? ''));
+        $composer = '';
+        $lyricist = '';
+
+        if (isset($xml->identification->creator)) {
+            foreach ($xml->identification->creator as $creator) {
+                $type = (string)($creator['type'] ?? '');
+                if ($type === 'composer') {
+                    $composer = (string)$creator;
+                } elseif ($type === 'lyricist' || $type === 'poet') {
+                    $lyricist = (string)$creator;
+                }
+            }
+        }
+
+        return [
+            'title' => trim($title),
+            'composer' => trim($composer),
+            'lyricist' => trim($lyricist),
+            'tempo' => 100,
+        ];
     }
 }

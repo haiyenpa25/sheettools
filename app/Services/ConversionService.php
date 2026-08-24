@@ -11,6 +11,7 @@ require_once dirname(__DIR__) . '/Services/ImagePreprocessService.php';
 require_once dirname(__DIR__) . '/Contracts/OmrEngineInterface.php';
 require_once dirname(__DIR__) . '/Adapters/AudiverisOmrEngine.php';
 require_once dirname(__DIR__) . '/DTOs/ConversionInputDto.php';
+require_once dirname(__DIR__) . '/DTOs/OmrResultDto.php';
 
 use App\Models\ConversionProject;
 use App\Repositories\ConversionProjectRepository;
@@ -19,9 +20,10 @@ use App\Services\ImagePreprocessService;
 use App\Contracts\OmrEngineInterface;
 use App\Adapters\AudiverisOmrEngine;
 use App\DTOs\ConversionInputDto;
+use App\DTOs\OmrResultDto;
 
 /**
- * Service điều phối toàn bộ quy trình chuyển đổi bản nhạc
+ * Service điều phối quy trình OMR trung thực (Truthful Conversion Pipeline)
  */
 class ConversionService
 {
@@ -39,7 +41,7 @@ class ConversionService
         $this->projectRepo = $projectRepo ?: new ConversionProjectRepository();
         $this->storageService = $storageService ?: new StorageService();
         $this->preprocessService = $preprocessService ?: new ImagePreprocessService();
-        $this->omrEngine = $omrEngine ?: new AudiverisOmrEngine();
+        $this->omrEngine = $omrEngine ?: new AudiverisOmrEngine($this->storageService);
     }
 
     /**
@@ -69,7 +71,7 @@ class ConversionService
     }
 
     /**
-     * Thực thi quy trình OMR cho dự án
+     * Thực thi quy trình OMR trung thực cho dự án
      */
     public function processProject(string $uuid): bool
     {
@@ -77,52 +79,64 @@ class ConversionService
         if (!$project) return false;
 
         try {
-            // Bước 1: Chuẩn bị & Tiền xử lý ảnh (OpenCV)
+            // Bước 1: Chuẩn bị & Tiền xử lý ảnh (OpenCV / PyMuPDF)
             $project->status = 'PROCESSING';
             $project->currentStep = 'preparing_pages';
             $project->progress = 20;
             $this->projectRepo->save($project);
 
             $sourcePath = $this->storageService->getSourcePath($uuid, $project->sourceFilename);
+            if (!file_exists($sourcePath)) {
+                throw new \RuntimeException("Source file missing at: {$sourcePath}");
+            }
+
             $pages = $this->preprocessService->processSource($uuid, $sourcePath, $project->sourceType);
 
-            // Bước 2: Chạy OMR Engine (Audiveris + Tesseract vie+eng)
+            // Bước 2: Chạy OMR Engine
             $project->currentStep = 'recognizing_score';
             $project->progress = 50;
             $this->projectRepo->save($project);
 
             $dto = new ConversionInputDto(
                 projectUuid: $uuid,
-                sourceFilePath: $pages[0] ?? $sourcePath,
+                sourceFilePath: !empty($pages) ? $pages[0] : $sourcePath,
                 sourceFileName: $project->sourceFilename,
                 sourceType: $project->sourceType,
                 language: $project->language
             );
 
+            /** @var OmrResultDto $result */
             $result = $this->omrEngine->transcribe($dto);
 
-            // Bước 3: Tạo MusicXML (Nếu OMR chạy xong hoặc dùng Golden Reference fixture khi chưa cài Audiveris)
-            $project->currentStep = 'creating_xml';
+            // Bước 3: Kiểm tra tính xác thực của Artifact MusicXML
+            $project->currentStep = 'validating_artifacts';
             $project->progress = 85;
             $this->projectRepo->save($project);
 
             $rawXmlPath = $this->storageService->getRawMusicXmlPath($uuid);
-            if (!file_exists($rawXmlPath)) {
-                // Sử dụng Golden Reference mẫu chuẩn để đảm bảo app luôn chạy được preview
-                $fixturePath = dirname(__DIR__, 2) . '/001 HỠI THÁNH VƯƠNG, KÍP NGỰ LAI.xml';
-                $fixtureContent = file_exists($fixturePath) ? file_get_contents($fixturePath) : '<score-partwise version="3.1"><part-list></part-list></score-partwise>';
-                $this->storageService->saveRawMusicXml($uuid, $fixtureContent);
+
+            if (!$result->success || !file_exists($rawXmlPath) || filesize($rawXmlPath) < 50) {
+                $errorMsg = !empty($result->warnings) 
+                    ? implode('; ', $result->warnings) 
+                    : "OMR engine did not produce a valid MusicXML artifact (Exit code: {$result->exitCode}).";
+                throw new \RuntimeException($errorMsg);
             }
 
-            // Bước 4: Hoàn thành & Chuyển sang chế độ Sẵn sàng Soát lỗi
-            $project->status = 'READY';
-            $project->currentStep = 'ready';
+            // Sao chép raw.musicxml sang current.musicxml phục vụ chỉnh sửa (Immutable Raw -> Mutable Current)
+            $currentXmlPath = $this->storageService->getCurrentMusicXmlPath($uuid);
+            copy($rawXmlPath, $currentXmlPath);
+
+            // Bước 4: Hoàn thành & Chuyển sang chế độ Sẵn sàng Soát lỗi (NEEDS_REVIEW)
+            $project->status = 'NEEDS_REVIEW';
+            $project->currentStep = 'needs_review';
             $project->progress = 100;
+            $project->errorMessage = null;
             $this->projectRepo->save($project);
 
             return true;
         } catch (\Throwable $e) {
             $project->status = 'FAILED';
+            $project->currentStep = 'failed';
             $project->errorMessage = $e->getMessage();
             $this->projectRepo->save($project);
             return false;
