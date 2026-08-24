@@ -1647,12 +1647,14 @@ async function initXml(xmlString: string) {
   setTimeout(attachDirectScoreClickListeners, 200);
 }
 
-// Global Keyboard Shortcuts (Ctrl+Z, Ctrl+Y, Space for play, Arrows for measures)
+// Global Keyboard Shortcuts (Ctrl+Z, Ctrl+Y, Space for play, Arrows for measures & note pitches)
 function handleKeydown(e: KeyboardEvent) {
   const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
   if (tag === 'input' || tag === 'textarea' || tag === 'select') {
     return;
   }
+
+  const stepsOrder = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
 
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
     if (e.shiftKey) triggerRedo();
@@ -1664,10 +1666,82 @@ function handleKeydown(e: KeyboardEvent) {
   } else if (e.code === 'Space') {
     toggleAudio();
     e.preventDefault();
-  } else if (e.key === 'ArrowRight') {
+  } else if (e.key === 'ArrowRight' && !e.altKey) {
     selectMeasure(Math.min(activeMeasure.value + 1, 30));
-  } else if (e.key === 'ArrowLeft') {
+  } else if (e.key === 'ArrowLeft' && !e.altKey) {
     selectMeasure(Math.max(activeMeasure.value - 1, 1));
+  } else if (e.key === 'ArrowUp' && (e.altKey || activeTab.value === 'note')) {
+    e.preventDefault();
+    if (measureNotes.value.length > 0) {
+      const targetNote = measureNotes.value[0];
+      const curIdx = stepsOrder.indexOf(targetNote.step);
+      if (curIdx === 6) {
+        targetNote.step = 'C';
+        targetNote.octave = Math.min(targetNote.octave + 1, 7);
+      } else {
+        targetNote.step = stepsOrder[curIdx + 1];
+      }
+      applyNoteItem(targetNote);
+      auditionNote(targetNote.step, targetNote.octave, targetNote.accidental);
+    }
+  } else if (e.key === 'ArrowDown' && (e.altKey || activeTab.value === 'note')) {
+    e.preventDefault();
+    if (measureNotes.value.length > 0) {
+      const targetNote = measureNotes.value[0];
+      const curIdx = stepsOrder.indexOf(targetNote.step);
+      if (curIdx === 0) {
+        targetNote.step = 'B';
+        targetNote.octave = Math.max(targetNote.octave - 1, 2);
+      } else {
+        targetNote.step = stepsOrder[curIdx - 1];
+      }
+      applyNoteItem(targetNote);
+      auditionNote(targetNote.step, targetNote.octave, targetNote.accidental);
+    }
+  } else if (e.key === '4' && (activeTab.value === 'note' || e.altKey)) {
+    e.preventDefault();
+    if (measureNotes.value.length > 0) {
+      measureNotes.value[0].duration = 'quarter';
+      applyNoteItem(measureNotes.value[0]);
+    }
+  } else if (e.key === '8' && (activeTab.value === 'note' || e.altKey)) {
+    e.preventDefault();
+    if (measureNotes.value.length > 0) {
+      measureNotes.value[0].duration = 'eighth';
+      applyNoteItem(measureNotes.value[0]);
+    }
+  } else if (e.key === '2' && (activeTab.value === 'note' || e.altKey)) {
+    e.preventDefault();
+    if (measureNotes.value.length > 0) {
+      measureNotes.value[0].duration = 'half';
+      applyNoteItem(measureNotes.value[0]);
+    }
+  } else if (e.key === '1' && (activeTab.value === 'note' || e.altKey)) {
+    e.preventDefault();
+    if (measureNotes.value.length > 0) {
+      measureNotes.value[0].duration = 'whole';
+      applyNoteItem(measureNotes.value[0]);
+    }
+  } else if (e.key === '.' && (activeTab.value === 'note' || e.altKey)) {
+    e.preventDefault();
+    if (measureNotes.value.length > 0) {
+      measureNotes.value[0].isDotted = !measureNotes.value[0].isDotted;
+      applyNoteItem(measureNotes.value[0]);
+    }
+  } else if ((e.key === '#' || e.key === '+') && (activeTab.value === 'note' || e.altKey)) {
+    e.preventDefault();
+    if (measureNotes.value.length > 0) {
+      measureNotes.value[0].accidental = measureNotes.value[0].accidental === 'sharp' ? null : 'sharp';
+      applyNoteItem(measureNotes.value[0]);
+      auditionNote(measureNotes.value[0].step, measureNotes.value[0].octave, measureNotes.value[0].accidental);
+    }
+  } else if ((e.key === 'b' || e.key === '-') && (activeTab.value === 'note' || e.altKey)) {
+    e.preventDefault();
+    if (measureNotes.value.length > 0) {
+      measureNotes.value[0].accidental = measureNotes.value[0].accidental === 'flat' ? null : 'flat';
+      applyNoteItem(measureNotes.value[0]);
+      auditionNote(measureNotes.value[0].step, measureNotes.value[0].octave, measureNotes.value[0].accidental);
+    }
   } else if (e.key === 'Escape') {
     inlineLyric.visible = false;
     inlineChord.visible = false;
