@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
 workers/audiveris_runner.py
-Điều phối pipeline: PDF → PNG (pypdfium2) → Audiveris OMR → MusicXML thực
+Điều phối Hybrid OMR pipeline: 
+PDF → PNG (pypdfium2) → OpenCV Preprocessing (CLAHE) → Audiveris OMR → music21 Auto-Healer → MusicXML chuẩn
 Usage: python audiveris_runner.py --input <file.pdf|file.png> --output <out_dir> [--audiveris <path_to_audiveris_cli>]
 """
 import argparse
@@ -13,6 +14,10 @@ import sys
 import tempfile
 import zipfile
 from pathlib import Path
+
+# Thêm đường dẫn root vào sys.path để import auto_healer
+sys.path.insert(0, os.path.dirname(__file__))
+from xml_tools.auto_healer import heal_musicxml
 
 # ───────── pypdfium2 trích ảnh PNG từ PDF ─────────
 def pdf_to_png_pages(pdf_path: str, output_dir: str, dpi: int = 300) -> list:
@@ -32,25 +37,25 @@ def pdf_to_png_pages(pdf_path: str, output_dir: str, dpi: int = 300) -> list:
     return pages_out
 
 
-# ───────── Tiền xử lý ảnh tăng độ tương phản (OpenCV) ─────────
+# ───────── Tiền xử lý ảnh nâng cao (OpenCV CLAHE & Denoising) ─────────
 def preprocess_image(png_path: str, out_path: str) -> str:
-    """Tăng tương phản và nhị phân hóa ảnh bản nhạc để Audiveris nhận diện tốt hơn."""
+    """Tăng tương phản thông minh và khử nhiễu để giữ nguyên vẹn thanh nối nốt và dòng kẻ."""
     try:
         import cv2
         img = cv2.imread(png_path, cv2.IMREAD_GRAYSCALE)
         if img is None:
-            return png_path  # Trả về ảnh gốc nếu không đọc được
-        # Adaptive thresholding để tách nốt nhạc rõ khỏi nền
-        binary = cv2.adaptiveThreshold(
-            img, 255,
-            cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-            cv2.THRESH_BINARY,
-            blockSize=15, C=10
-        )
-        cv2.imwrite(out_path, binary)
+            return png_path
+
+        # 1. Khử nhiễu nhẹ
+        denoised = cv2.fastNlMeansDenoising(img, h=7)
+
+        # 2. Tăng tương phản bằng CLAHE (Contrast Limited Adaptive Histogram Equalization)
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        contrast = clahe.apply(denoised)
+
+        cv2.imwrite(out_path, contrast)
         return out_path
     except ImportError:
-        # OpenCV chưa cài, dùng ảnh gốc
         return png_path
 
 
@@ -61,14 +66,13 @@ def find_audiveris_cli(hint=None):
     if hint:
         candidates.append(hint)
 
-    # Các vị trí cài mặc định trên Windows
     candidates += [
+        r"D:\tools\audiveris\install\Audiveris\Audiveris.exe",
         r"D:\tools\audiveris\bin\Audiveris.bat",
         r"C:\Program Files\Audiveris\bin\Audiveris.bat",
         r"D:\audiveris\bin\Audiveris.bat",
         r"C:\tools\audiveris\bin\Audiveris.bat",
     ]
-    # Tìm trong PATH
     import shutil
     path_result = shutil.which("Audiveris") or shutil.which("audiveris")
     if path_result:
@@ -78,13 +82,10 @@ def find_audiveris_cli(hint=None):
         if os.path.isfile(c):
             return c
 
-    # Tìm đệ quy trong D:\tools\ và C:\Program Files\
     for search_root in [r"D:\tools", r"C:\Program Files"]:
         if os.path.isdir(search_root):
-            matches = glob.glob(
-                os.path.join(search_root, "**", "Audiveris.bat"),
-                recursive=True
-            )
+            matches = glob.glob(os.path.join(search_root, "**", "Audiveris.exe"), recursive=True) + \
+                      glob.glob(os.path.join(search_root, "**", "Audiveris.bat"), recursive=True)
             if matches:
                 return matches[0]
     return None
@@ -124,11 +125,9 @@ def run_audiveris(input_path: str, output_dir: str, audiveris_cli: str) -> dict:
 
     xml_path = None
 
-    # Ưu tiên .xml thuần, nếu không có mới dùng .mxl
     if xml_files:
         xml_path = xml_files[0]
     elif mxl_files:
-        # Giải nén .mxl (thực ra là zip chứa MusicXML)
         mxl_path = mxl_files[0]
         try:
             with zipfile.ZipFile(mxl_path, 'r') as z:
@@ -141,7 +140,16 @@ def run_audiveris(input_path: str, output_dir: str, audiveris_cli: str) -> dict:
         except Exception as e:
             log += f"\nLỗi giải nén MXL: {e}"
 
+    # Bước chuẩn hóa tự động bằng music21 Auto-Healer
     if xml_path and os.path.isfile(xml_path):
+        try:
+            healed_path = os.path.join(output_dir, "score_healed.xml")
+            if heal_musicxml(xml_path, healed_path):
+                xml_path = healed_path
+                log += "\nAuto-healer: music21 measure balancing applied successfully."
+        except Exception as e:
+            log += f"\nAuto-healer notice: {e}"
+
         return {
             "success": True,
             "xml_path": xml_path,
@@ -160,10 +168,6 @@ def run_audiveris(input_path: str, output_dir: str, audiveris_cli: str) -> dict:
 
 # ───────── Pipeline chính ─────────
 def process(input_path: str, output_dir: str, audiveris_hint=None) -> dict:
-    """
-    Luồng chính:
-    PDF/PNG → (PDF to PNG nếu cần) → Tiền xử lý → Audiveris → MusicXML
-    """
     input_path = os.path.abspath(input_path)
     output_dir = os.path.abspath(output_dir)
     os.makedirs(output_dir, exist_ok=True)
@@ -190,18 +194,17 @@ def process(input_path: str, output_dir: str, audiveris_hint=None) -> dict:
         if not pages:
             return {"success": False, "error": "PDF không có trang nào.", "xml_path": None}
 
-        # Chỉ lấy trang đầu tiên (đa số bài thánh ca 1 trang)
         source_png = pages[0]
     elif ext in ('.png', '.jpg', '.jpeg', '.tif', '.tiff'):
         source_png = input_path
     else:
         return {"success": False, "error": f"Định dạng không hỗ trợ: {ext}", "xml_path": None}
 
-    # Bước 2: Tiền xử lý ảnh (OpenCV)
+    # Bước 2: Tiền xử lý ảnh thông minh (CLAHE + Denoise)
     preprocessed_png = os.path.join(output_dir, "preprocessed.png")
     final_png = preprocess_image(source_png, preprocessed_png)
 
-    # Bước 3: Chạy Audiveris OMR
+    # Bước 3: Chạy Audiveris OMR + music21 Auto-Healer
     omr_out_dir = os.path.join(output_dir, "omr_out")
     result = run_audiveris(final_png, omr_out_dir, audiveris_cli)
 
@@ -217,14 +220,13 @@ def process(input_path: str, output_dir: str, audiveris_hint=None) -> dict:
 
 # ───────── CLI Entry Point ─────────
 def main():
-    parser = argparse.ArgumentParser(description="Audiveris OMR Runner — SheetTools")
+    parser = argparse.ArgumentParser(description="Hybrid OMR Runner — SheetTools")
     parser.add_argument("--input", required=True, help="Đường dẫn file PDF hoặc PNG")
     parser.add_argument("--output", required=True, help="Thư mục output")
     parser.add_argument("--audiveris", default=None, help="Đường dẫn Audiveris CLI (tùy chọn)")
     args = parser.parse_args()
 
     result = process(args.input, args.output, args.audiveris)
-    # Xuất kết quả JSON để PHP backend đọc
     print(json.dumps(result, ensure_ascii=False, indent=2))
     sys.exit(0 if result["success"] else 1)
 
