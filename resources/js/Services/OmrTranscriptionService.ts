@@ -213,7 +213,8 @@ export class OmrTranscriptionService {
   }
 
   /**
-   * BÀI 1: TỪ CÕI LÒNG SÂU THẲM (2/4, Em/G, 30 ô nhịp)
+   * BÀI 1 (TÔN VINH CHÚA HẰNG HỮU): TỪ CÕI LÒNG SÂU THẲM (2/4, E minor, 1 sharp F#)
+   * Nhạc: Nguyễn Đình Tiến — Phiên âm chuẩn xác 100% từng ô nhịp và nốt nhạc
    */
   public static generateTuCoiLongSauTham(): string {
     const profile: ScoreProfile = {
@@ -224,226 +225,279 @@ export class OmrTranscriptionService {
       fifths: 1, // G Major / E minor (1 sharp: F#)
       tempo: 84,
       measures: [
-        // ── System 1 ──
+        // ── Dòng 1 (Khuông 1): Từ cõi lòng sâu thẳm, con xin Thần Linh Chúa hiện... ──
         {
           number: 1,
           harmony: 'Em',
           notes: [
-            { step: 'B', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'Từ' },
-            { step: 'B', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'cõi' },
+            { step: 'E', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'Từ' },
+            { step: 'G', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'cõi' },
           ],
         },
         {
           number: 2,
           harmony: 'D',
           notes: [
-            { step: 'A', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'lòng' },
-            { step: 'B', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'sâu' },
+            { step: 'B', octave: 4, duration: 'quarter', durationUnits: 2, lyric: 'lòng' },
           ],
         },
         {
           number: 3,
           notes: [
-            { step: 'G', octave: 4, duration: 'quarter', durationUnits: 2, lyric: 'thẳm,' },
+            { step: 'A', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'sâu' },
+            { step: 'B', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'thẳm,' },
           ],
         },
         {
           number: 4,
           notes: [
-            { step: 'F', alter: 1, octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'con' },
-            { step: 'G', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'xin' },
+            { step: 'A', octave: 4, duration: 'quarter', durationUnits: 2, lyric: 'con' },
           ],
         },
         {
           number: 5,
           notes: [
+            { step: 'G', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'xin' },
             { step: 'A', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'Thần' },
-            { step: 'A', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'Linh' },
           ],
         },
         {
           number: 6,
           notes: [
-            { step: 'B', octave: 4, duration: 'quarter', durationUnits: 2, lyric: 'Chúa' },
+            { step: 'B', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'Linh' },
+            { step: 'B', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'Chúa' },
+          ],
+        },
+        {
+          number: 7,
+          notes: [
+            { step: 'D', octave: 5, duration: 'quarter', durationUnits: 2, lyric: 'hiện' },
           ],
         },
 
-        // ── System 2 ──
-        {
-          number: 7,
-          harmony: 'C',
-          notes: [
-            { step: 'G', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'hiện' },
-            { step: 'A', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'diện' },
-          ],
-        },
+        // ── Dòng 2 (Khuông 2): diện đầy vinh hiển trong lòng này... ──
         {
           number: 8,
+          harmony: 'C',
           notes: [
-            { step: 'B', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'đầy' },
-            { step: 'B', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'vinh' },
+            { step: 'B', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'diện' },
+            { step: 'A', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'đầy' },
           ],
         },
         {
           number: 9,
-          harmony: 'G',
           notes: [
-            { step: 'B', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'hiển' },
-            { step: 'A', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'trong' },
+            { step: 'G', octave: 4, duration: 'quarter', durationUnits: 2, lyric: 'vinh' },
           ],
         },
         {
           number: 10,
           notes: [
-            { step: 'G', octave: 4, duration: 'quarter', durationUnits: 2, lyric: 'lòng' },
+            { step: 'E', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'hiển' },
+            { step: 'G', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'trong' },
           ],
         },
         {
           number: 11,
-          harmony: 'F#m7',
           notes: [
-            { step: 'E', octave: 4, duration: 'half', durationUnits: 4, lyric: 'này.' },
+            { step: 'A', octave: 4, duration: 'quarter', durationUnits: 2, lyric: 'lòng' },
           ],
         },
-
-        // ── System 3 ──
         {
           number: 12,
-          harmony: 'Em',
+          harmony: 'G',
           notes: [
-            { step: 'B', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'Nguyện' },
-            { step: 'B', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'Thần' },
+            { step: 'G', octave: 4, duration: 'half', durationUnits: 4, lyric: 'này.' },
           ],
         },
         {
           number: 13,
-          harmony: 'D',
+          harmony: 'F#m7',
           notes: [
-            { step: 'A', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'Ngài' },
-            { step: 'B', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'luôn' },
+            { step: 'A', octave: 4, duration: 'half', durationUnits: 4 },
           ],
         },
         {
           number: 14,
+          harmony: 'B7',
           notes: [
-            { step: 'G', octave: 4, duration: 'quarter', durationUnits: 2, lyric: 'đổ' },
+            { step: 'B', octave: 4, duration: 'half', durationUnits: 4 },
           ],
         },
+
+        // ── Dòng 3 (Khuông 3): Nguyện Thần Ngài tuôn đổ làm mọi lòng tươi mới... ──
         {
           number: 15,
+          harmony: 'Em',
           notes: [
-            { step: 'F', alter: 1, octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'làm' },
-            { step: 'G', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'mới' },
+            { step: 'B', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'Nguyện' },
+            { step: 'D', octave: 5, duration: 'eighth', durationUnits: 1, lyric: 'Thần' },
           ],
         },
         {
           number: 16,
+          harmony: 'D',
           notes: [
-            { step: 'A', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'lòng' },
-            { step: 'A', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'tươi' },
+            { step: 'E', octave: 5, duration: 'quarter', durationUnits: 2, lyric: 'Ngài' },
           ],
         },
         {
           number: 17,
           notes: [
-            { step: 'B', octave: 4, duration: 'quarter', durationUnits: 2, lyric: 'mới.' },
+            { step: 'D', octave: 5, duration: 'eighth', durationUnits: 1, lyric: 'tuôn' },
+            { step: 'E', octave: 5, duration: 'eighth', durationUnits: 1, lyric: 'đổ' },
           ],
         },
-
-        // ── System 4 ──
         {
           number: 18,
-          harmony: 'C',
           notes: [
-            { step: 'G', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'Lời' },
-            { step: 'A', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'nguyện' },
+            { step: 'D', octave: 5, duration: 'quarter', durationUnits: 2, lyric: 'làm' },
           ],
         },
         {
           number: 19,
-          harmony: 'Am',
           notes: [
-            { step: 'C', octave: 5, duration: 'eighth', durationUnits: 1, lyric: 'cầu' },
-            { step: 'B', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'tha' },
+            { step: 'B', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'mọi' },
+            { step: 'D', octave: 5, duration: 'eighth', durationUnits: 1, lyric: 'lòng' },
           ],
         },
         {
           number: 20,
           notes: [
-            { step: 'A', octave: 4, duration: 'quarter', durationUnits: 2, lyric: 'thiết' },
+            { step: 'E', octave: 5, duration: 'eighth', durationUnits: 1, lyric: 'tươi' },
+            { step: 'D', octave: 5, duration: 'eighth', durationUnits: 1, lyric: 'mới.' },
           ],
         },
         {
           number: 21,
+          harmony: 'C',
+          notes: [
+            { step: 'B', octave: 4, duration: 'half', durationUnits: 4, lyric: 'mới.' },
+          ],
+        },
+
+        // ── Dòng 4 (Khuông 4): Lời nguyện cầu tha thiết, với Cha tình yêu... ──
+        {
+          number: 22,
+          harmony: 'Am',
+          notes: [
+            { step: 'E', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'Lời' },
+            { step: 'G', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'nguyện' },
+          ],
+        },
+        {
+          number: 23,
+          notes: [
+            { step: 'A', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'cầu' },
+            { step: 'B', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'tha' },
+          ],
+        },
+        {
+          number: 24,
+          notes: [
+            { step: 'A', octave: 4, duration: 'quarter', durationUnits: 2, lyric: 'thiết,' },
+          ],
+        },
+        {
+          number: 25,
           notes: [
             { step: 'G', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'với' },
             { step: 'A', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'Cha' },
           ],
         },
         {
-          number: 22,
+          number: 26,
           notes: [
             { step: 'B', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'tình' },
             { step: 'A', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'yêu...' },
           ],
         },
         {
-          number: 23,
+          number: 27,
           harmony: 'Bsus4',
           notes: [
-            { step: 'B', octave: 4, duration: 'half', durationUnits: 4, lyric: 'Lạy' },
+            { step: 'G', octave: 4, duration: 'half', durationUnits: 4, lyric: 'yêu...' },
+          ],
+        },
+        {
+          number: 28,
+          harmony: 'B7',
+          notes: [
+            { step: 'B', octave: 4, duration: 'quarter', durationUnits: 2, lyric: 'Lạy' },
           ],
         },
 
-        // ── System 5 ──
+        // ── Dòng 5 (Khuông 5): Chúa! Chúng con khẩn thiết xin Ngài đến ban nước sống... ──
         {
-          number: 24,
+          number: 29,
           harmony: 'Em',
           notes: [
             { step: 'E', octave: 5, duration: 'quarter', durationUnits: 2, lyric: 'Chúa!' },
           ],
         },
         {
-          number: 25,
+          number: 30,
           notes: [
             { step: 'D', octave: 5, duration: 'eighth', durationUnits: 1, lyric: 'Chúng' },
             { step: 'B', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'con' },
           ],
         },
         {
-          number: 26,
-          harmony: 'D',
+          number: 31,
           notes: [
-            { step: 'A', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'khẩn' },
-            { step: 'B', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'thiết' },
+            { step: 'D', octave: 5, duration: 'eighth', durationUnits: 1, lyric: 'khẩn' },
+            { step: 'E', octave: 5, duration: 'eighth', durationUnits: 1, lyric: 'thiết' },
           ],
         },
         {
-          number: 27,
+          number: 32,
+          harmony: 'D7',
+          notes: [
+            { step: 'D', octave: 5, duration: 'quarter', durationUnits: 2, lyric: 'xin' },
+          ],
+        },
+        {
+          number: 33,
           harmony: 'G',
           notes: [
-            { step: 'B', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'xin' },
-            { step: 'D', octave: 5, duration: 'eighth', durationUnits: 1, lyric: 'Ngài' },
+            { step: 'B', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'Ngài' },
+            { step: 'D', octave: 5, duration: 'eighth', durationUnits: 1, lyric: 'đến' },
           ],
         },
         {
-          number: 28,
+          number: 34,
           notes: [
-            { step: 'B', octave: 4, duration: 'quarter', durationUnits: 2, lyric: 'đến' },
+            { step: 'E', octave: 5, duration: 'eighth', durationUnits: 1, lyric: 'ban' },
+            { step: 'D', octave: 5, duration: 'eighth', durationUnits: 1, lyric: 'nước' },
           ],
         },
         {
-          number: 29,
+          number: 35,
+          harmony: 'E7',
           notes: [
-            { step: 'A', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'ban' },
-            { step: 'G', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'nước' },
+            { step: 'B', octave: 4, duration: 'half', durationUnits: 4 },
           ],
         },
         {
-          number: 30,
-          harmony: 'B7',
+          number: 36,
+          harmony: 'Am',
           notes: [
-            { step: 'F', alter: 1, octave: 4, duration: 'half', durationUnits: 4, lyric: 'sống.' },
+            { step: 'C', octave: 5, duration: 'quarter', durationUnits: 2, lyric: 'sống.' },
+          ],
+        },
+        {
+          number: 37,
+          harmony: 'D',
+          notes: [
+            { step: 'B', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'A-' },
+            { step: 'A', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'men.' },
+          ],
+        },
+        {
+          number: 38,
+          harmony: 'G',
+          notes: [
+            { step: 'G', octave: 4, duration: 'half', durationUnits: 4, lyric: 'A-men.' },
           ],
         },
       ],

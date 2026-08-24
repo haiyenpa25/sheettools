@@ -16,10 +16,23 @@ export interface ProjectItem {
   xmlContent?: string;
 }
 
-const STORAGE_KEY = 'sheet_converter_projects_v7';
+const STORAGE_KEY = 'sheet_converter_projects_v8';
 
 // Default initial projects with accurate MusicXML content
 const initialProjects: ProjectItem[] = [
+  {
+    id: 'p_001',
+    title: 'TỪ CÕI LÒNG SÂU THẲM',
+    composer: 'Nguyễn Đình Tiến',
+    date: '24/08/2026',
+    status: 'READY',
+    verses: 1,
+    keySig: 'E minor / G Major',
+    timeSig: '2/4',
+    sourceFilename: '1.pdf',
+    sourceImageUrl: '/golden.png',
+    xmlContent: OmrTranscriptionService.generateTuCoiLongSauTham(),
+  },
   {
     id: 'p_002',
     title: 'TRỌN CẢ TẤM LÒNG',
@@ -31,18 +44,6 @@ const initialProjects: ProjectItem[] = [
     timeSig: '4/4',
     sourceFilename: '2.pdf',
     xmlContent: OmrTranscriptionService.generateTronCaTamLong(),
-  },
-  {
-    id: 'p_001',
-    title: 'TỪ CÕI LÒNG SÂU THẲM',
-    composer: 'Nguyễn Đình Tiến',
-    date: '24/08/2026',
-    status: 'READY',
-    verses: 1,
-    keySig: 'E minor / G Major',
-    timeSig: '2/4',
-    sourceFilename: '1.pdf',
-    xmlContent: OmrTranscriptionService.generateTuCoiLongSauTham(),
   },
   {
     id: 'p_doxology',
@@ -84,7 +85,7 @@ const initialProjects: ProjectItem[] = [
 
 class ProjectStore {
   public projects = reactive<ProjectItem[]>([]);
-  public activeProjectId = ref<string>('p_002');
+  public activeProjectId = ref<string>('p_001');
 
   constructor() {
     this.loadFromStorage();
