@@ -46,9 +46,11 @@ graph TD
     end
 
     subgraph Workers [Tầng Worker & Python Processing Subsystem]
-        ImagePreprocessService --> PreprocessWorker[workers/preprocessing/pipeline.py - OpenCV]
-        AudiverisOmrEngine --> AudiverisCLI[Audiveris Java CLI + Tesseract vie+eng]
-        AudiverisCLI --> RawXML[raw.musicxml + source.omr]
+        ImagePreprocessService --> PreprocessWorker[workers/preprocessing/pipeline.py - OpenCV CLAHE]
+        AudiverisOmrEngine --> AudiverisRunner[workers/audiveris_runner.py - Hybrid OMR Pipeline]
+        AudiverisRunner --> AudiverisCLI[Audiveris Java CLI + Tesseract vie+eng]
+        AudiverisRunner --> AutoHealer[workers/xml_tools/auto_healer.py - music21 Auto-Healer]
+        AutoHealer --> RawXML[raw.musicxml + score_healed.xml + source.omr]
         
         LyricService --> XmlPatcher[workers/xml_tools/patcher.py - lxml/ET]
         HarmonyService --> DOMPatcher[PHP DOM & lxml]
