@@ -220,6 +220,11 @@ def process(input_path: str, output_dir: str, audiveris_hint=None) -> dict:
 
 # ───────── CLI Entry Point ─────────
 def main():
+    if sys.platform == "win32":
+        try:
+            sys.stdout.reconfigure(encoding='utf-8')
+        except Exception:
+            pass
     parser = argparse.ArgumentParser(description="Hybrid OMR Runner — SheetTools")
     parser.add_argument("--input", required=True, help="Đường dẫn file PDF hoặc PNG")
     parser.add_argument("--output", required=True, help="Thư mục output")
@@ -229,6 +234,7 @@ def main():
     result = process(args.input, args.output, args.audiveris)
     print(json.dumps(result, ensure_ascii=False, indent=2))
     sys.exit(0 if result["success"] else 1)
+
 
 
 if __name__ == "__main__":
