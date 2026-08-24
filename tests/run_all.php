@@ -13,6 +13,8 @@ $tests = [
     'Unit Tests' => [
         __DIR__ . '/Unit/MusicXmlServiceTest.php',
         __DIR__ . '/Unit/HarmonyServiceTest.php',
+        __DIR__ . '/Unit/NoteServiceTest.php',
+        __DIR__ . '/Unit/LyricServiceTest.php',
     ],
     'Golden Reference Tests' => [
         __DIR__ . '/Golden/GoldenHymnExtractionTest.php',

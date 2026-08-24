@@ -54,7 +54,16 @@ class ExportService
     public function export(string $uuid, string $format = 'musicxml'): ?string
     {
         $curPath = $this->storageService->getCurrentMusicXmlPath($uuid);
-        if (!file_exists($curPath)) return null;
+        if (!file_exists($curPath)) {
+            $curPath = $this->storageService->getRawMusicXmlPath($uuid);
+        }
+        if (!file_exists($curPath) || filesize($curPath) < 50) return null;
+
+        // Kiểm tra tính hợp lệ của XML trước khi xuất
+        $doc = new \DOMDocument();
+        if (!@$doc->load($curPath)) {
+            return null;
+        }
 
         $exportDir = $this->storageService->getProjectDir($uuid) . DIRECTORY_SEPARATOR . 'export';
         if (!is_dir($exportDir)) {
