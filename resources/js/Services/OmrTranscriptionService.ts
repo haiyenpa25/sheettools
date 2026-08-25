@@ -225,22 +225,22 @@ export class OmrTranscriptionService {
       fifths: 1, // G Major / E minor (1 sharp: F#)
       tempo: 84,
       measures: [
-        // ── Dòng 1 (Khuông 1): Từ cõi lòng | sâu thẳm, con | xin Thần Linh Chúa | hiện diện đầy ──
+        // ── Dòng 1 (Khuông 1): Từ cõi lòng (Mi-Mi-Mi) | sâu thẳm, con (Fa#-Sol-La) | xin Thần Linh Chúa | hiện diện đầy ──
         {
           number: 1,
           harmony: 'Em',
           notes: [
             { step: 'E', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'Từ' },
-            { step: 'G', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'cõi' },
-            { step: 'B', octave: 4, duration: 'quarter', durationUnits: 2, lyric: 'lòng' },
+            { step: 'E', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'cõi' },
+            { step: 'E', octave: 4, duration: 'quarter', durationUnits: 2, lyric: 'lòng' },
           ],
         },
         {
           number: 2,
           harmony: 'D',
           notes: [
-            { step: 'A', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'sâu' },
-            { step: 'B', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'thẳm,' },
+            { step: 'F', alter: 1, octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'sâu' },
+            { step: 'G', octave: 4, duration: 'eighth', durationUnits: 1, lyric: 'thẳm,' },
             { step: 'A', octave: 4, duration: 'quarter', durationUnits: 2, lyric: 'con' },
           ],
         },
