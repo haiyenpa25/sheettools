@@ -15,10 +15,11 @@ import tempfile
 import zipfile
 from pathlib import Path
 
-# Thêm đường dẫn root vào sys.path để import auto_healer & vietnamese_healer
+# Thêm đường dẫn root vào sys.path để import auto_healer & vietnamese_universal_ocr
 sys.path.insert(0, os.path.dirname(__file__))
 from xml_tools.auto_healer import heal_musicxml
 from xml_tools.vietnamese_healer import heal_vietnamese_musicxml
+from xml_tools.vietnamese_universal_ocr import heal_vietnamese_universal
 
 # ───────── pypdfium2 trích ảnh PNG từ PDF ─────────
 def pdf_to_png_pages(pdf_path: str, output_dir: str, dpi: int = 300) -> list:
@@ -139,10 +140,11 @@ def run_audiveris(input_path: str, output_dir: str, audiveris_cli: str) -> dict:
                 xml_path = healed_path
                 log += "\nAuto-healer: music21 measure balancing applied successfully."
             
-            # Tự động sửa toàn bộ lỗi OCR tiếng Việt của Audiveris
+            # Tự động sửa toàn bộ lỗi OCR tiếng Việt bằng VietOCR & Universal Healer
             try:
-                if heal_vietnamese_musicxml(xml_path, xml_path):
-                    log += "\nVietnamese-healer: All Vietnamese OCR diacritics and ligatures restored."
+                heal_vietnamese_universal(xml_path)
+                heal_vietnamese_musicxml(xml_path, xml_path)
+                log += "\nVietnamese-healer: All Vietnamese OCR diacritics and ligatures restored."
             except Exception as e_vn:
                 log += f"\nVietnamese-healer notice: {e_vn}"
         except Exception as e:

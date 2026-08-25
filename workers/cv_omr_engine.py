@@ -608,39 +608,37 @@ class ComputerVisionOmrEngine:
     def _get_ocr_engine(self):
         if not hasattr(self, '_ocr_engine') or self._ocr_engine is None:
             try:
-                from rapidocr_onnxruntime import RapidOCR
-                self._ocr_engine = RapidOCR()
-            except Exception:
+                sys.path.insert(0, os.path.dirname(__file__))
+                from xml_tools.vietnamese_universal_ocr import VietnameseUniversalOcrEngine
+                self._ocr_engine = VietnameseUniversalOcrEngine()
+            except Exception as e:
                 self._ocr_engine = False
         return self._ocr_engine if self._ocr_engine is not False else None
 
     def extract_page_ocr(self, img_path: str, w: int, h: int) -> list[tuple[float, float, str]]:
-        """Chạy OCR 1 lần duy nhất cho toàn bộ trang và trả về danh sách từ kèm tọa độ (cx, cy, text)."""
+        """Chạy Universal Vietnamese OCR (VietOCR Transformer + RapidOCR) cho toàn bộ trang."""
         detected_words: list[tuple[float, float, str]] = []
-        ocr = self._get_ocr_engine()
-        if ocr is not None:
+        engine = self._get_ocr_engine()
+        if engine is not None:
             try:
-                ocr_results, _ = ocr(img_path)
-                if ocr_results:
-                    for item in ocr_results:
-                        box, text, score = item
-                        cy = (box[0][1] + box[2][1]) / 2.0
-                        txt_clean = str(text).strip()
-                        if not txt_clean or float(score) < 0.35:
-                            continue
-                        words = txt_clean.split()
-                        if len(words) > 1:
-                            box_w = box[1][0] - box[0][0]
-                            w_step = box_w / len(words)
-                            for wi, w_str in enumerate(words):
-                                w_cx = box[0][0] + (wi + 0.5) * w_step
-                                detected_words.append((w_cx, cy, w_str))
-                        else:
-                            cx = (box[0][0] + box[1][0]) / 2.0
-                            detected_words.append((cx, cy, txt_clean))
+                data = engine.extract_full_page_lyrics_and_metadata(img_path)
+                for item in data.get('all_words', []):
+                    txt_clean = item['text']
+                    cx = item['cx']
+                    cy = item['cy']
+                    words = txt_clean.split()
+                    if len(words) > 1:
+                        box = item.get('box', [[cx-20, cy-10],[cx+20, cy-10],[cx+20, cy+10],[cx-20, cy+10]])
+                        box_w = box[1][0] - box[0][0]
+                        w_step = box_w / len(words)
+                        for wi, w_str in enumerate(words):
+                            w_cx = box[0][0] + (wi + 0.5) * w_step
+                            detected_words.append((w_cx, cy, w_str))
+                    else:
+                        detected_words.append((cx, cy, txt_clean))
             except Exception as e:
                 if self.debug:
-                    print(f"[CV-OMR][DEBUG] RapidOCR notice: {e}")
+                    print(f"[CV-OMR][DEBUG] Universal Vietnamese OCR notice: {e}")
 
         # Fallback sang pytesseract nếu không có RapidOCR
         if not detected_words:
