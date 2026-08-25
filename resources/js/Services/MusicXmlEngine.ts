@@ -303,24 +303,26 @@ export class MusicXmlEngine {
   public autoFixVietnameseLyrics(): number {
     let fixedCount = 0;
     const dictionary: Record<string, string> = {
-      'Hơi': 'Hỡi',
-      'Hoi': 'Hỡi',
-      'Thanh': 'Thánh',
-      'Vuong': 'Vương',
-      'ngu': 'ngự',
-      'ngư': 'ngự',
-      'kip': 'kíp',
-      'lai': 'lai,',
-      'chua': 'Chúa,',
-      'Chua': 'Chúa,',
-      'Dâng': 'Đấng',
-      'thần': 'Thần',
-      'linh': 'Linh',
-      'Thanh Linh': 'Thánh Linh',
-      'tôn vinh': 'tôn vinh,',
-      'ngợi khen': 'ngợi khen,',
-      'cuu': 'cứu',
-      'rỗi': 'rỗi,',
+      'Hơi': 'Hỡi', 'Hoi': 'Hỡi', 'hoi': 'hỡi', 'hơi': 'hỡi',
+      'Thanh': 'Thánh', 'thanh': 'thánh', 'Vuong': 'Vương', 'vuong': 'vương',
+      'ngu': 'ngự', 'ngư': 'ngự', 'kip': 'kíp', 'lai': 'lai',
+      'chua': 'Chúa', 'Chua': 'Chúa', 'Dâng': 'Đấng', 'Dang': 'Đấng', 'dang': 'đấng',
+      'than': 'thần', 'Than': 'Thần', 'linh': 'Linh', 'Linh': 'Linh',
+      'coi': 'cõi', 'Coi': 'Cõi', 'long': 'lòng', 'Long': 'Lòng',
+      'sau': 'sâu', 'Sau': 'Sâu', 'tham': 'thẳm', 'Tham': 'Thẳm', 'tham,': 'thẳm,',
+      'hien': 'hiện', 'Hien': 'Hiện', 'dien': 'diện', 'Dien': 'Diện',
+      'day': 'đầy', 'Day': 'Đầy', 'vinh': 'vinh', 'Vinh': 'Vinh',
+      'nguyen': 'nguyện', 'Nguyen': 'Nguyện', 'Ngai': 'Ngài', 'ngai': 'ngài',
+      'tuon': 'tuôn', 'Tuon': 'Tuôn', 'moi': 'mới', 'Moi': 'Mới',
+      'tuoi': 'tươi', 'Tuoi': 'Tươi', 'loi': 'lời', 'Loi': 'Lời',
+      'cau': 'cầu', 'Cau': 'Cầu', 'tam': 'tấm', 'Tam': 'Tấm',
+      'tron': 'trọn', 'Tron': 'Trọn', 'ca': 'cả', 'Ca': 'Cả',
+      'ton': 'tôn', 'Ton': 'Tôn', 'nguon': 'nguồn', 'Nguon': 'Nguồn',
+      'on': 'ơn', 'On': 'Ơn', 'vo': 'vô', 'Vo': 'Vô',
+      'doi': 'đối', 'Doi': 'Đối', 'khap': 'khắp', 'Khap': 'Khắp',
+      'noi': 'nơi', 'Noi': 'Nơi', 'chuc': 'chúc', 'Chuc': 'Chúc',
+      'tung': 'tụng', 'Tung': 'Tụng', 'cuu': 'cứu', 'Cuu': 'Cứu',
+      'roi': 'rỗi', 'Roi': 'Rỗi', 'chua chan': 'chứa chan',
     };
 
     this.doc.querySelectorAll('lyric > text').forEach(textNode => {
@@ -328,6 +330,13 @@ export class MusicXmlEngine {
       if (dictionary[original]) {
         textNode.textContent = dictionary[original];
         fixedCount++;
+      } else {
+        const lower = original.toLowerCase();
+        if (dictionary[lower]) {
+          const match = dictionary[lower];
+          textNode.textContent = (original[0] === original[0].toUpperCase()) ? (match[0].toUpperCase() + match.slice(1)) : match;
+          fixedCount++;
+        }
       }
     });
 

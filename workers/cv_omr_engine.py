@@ -605,65 +605,92 @@ class ComputerVisionOmrEngine:
     # 7. Gắn Lời Tiếng Việt (Lyrics)                         [FIX-7]
     # ════════════════════════════════════════════════════════════
 
+    def _get_ocr_engine(self):
+        if not hasattr(self, '_ocr_engine') or self._ocr_engine is None:
+            try:
+                from rapidocr_onnxruntime import RapidOCR
+                self._ocr_engine = RapidOCR()
+            except Exception:
+                self._ocr_engine = False
+        return self._ocr_engine if self._ocr_engine is not False else None
+
+    def extract_page_ocr(self, img_path: str, w: int, h: int) -> list[tuple[float, float, str]]:
+        """Chạy OCR 1 lần duy nhất cho toàn bộ trang và trả về danh sách từ kèm tọa độ (cx, cy, text)."""
+        detected_words: list[tuple[float, float, str]] = []
+        ocr = self._get_ocr_engine()
+        if ocr is not None:
+            try:
+                ocr_results, _ = ocr(img_path)
+                if ocr_results:
+                    for item in ocr_results:
+                        box, text, score = item
+                        cy = (box[0][1] + box[2][1]) / 2.0
+                        txt_clean = str(text).strip()
+                        if not txt_clean or float(score) < 0.35:
+                            continue
+                        words = txt_clean.split()
+                        if len(words) > 1:
+                            box_w = box[1][0] - box[0][0]
+                            w_step = box_w / len(words)
+                            for wi, w_str in enumerate(words):
+                                w_cx = box[0][0] + (wi + 0.5) * w_step
+                                detected_words.append((w_cx, cy, w_str))
+                        else:
+                            cx = (box[0][0] + box[1][0]) / 2.0
+                            detected_words.append((cx, cy, txt_clean))
+            except Exception as e:
+                if self.debug:
+                    print(f"[CV-OMR][DEBUG] RapidOCR notice: {e}")
+
+        # Fallback sang pytesseract nếu không có RapidOCR
+        if not detected_words:
+            try:
+                import pytesseract
+                full_img = cv2.imread(img_path)
+                if full_img is not None:
+                    custom_config = r'--oem 3 --psm 6 -c preserve_interword_spaces=1'
+                    data = pytesseract.image_to_data(
+                        full_img, lang='vie+eng', config=custom_config, output_type=pytesseract.Output.DICT
+                    )
+                    n_boxes = len(data['text'])
+                    for i in range(n_boxes):
+                        txt = str(data['text'][i]).strip()
+                        conf = int(data['conf'][i]) if str(data['conf'][i]).lstrip('-').isdigit() else 0
+                        if txt and conf >= 20:
+                            word_cx = data['left'][i] + data['width'][i] / 2.0
+                            word_cy = data['top'][i] + data['height'][i] / 2.0
+                            detected_words.append((word_cx, word_cy, txt))
+            except Exception:
+                pass
+
+        return detected_words
+
     def match_lyrics(self, noteheads: list[dict], staff_lines: list[float],
-                     img_path: str, w: int, next_staff_top: float = None) -> None:
+                     page_words: list[tuple[float, float, str]], w: int, next_staff_top: float = None) -> None:
         """
-        [FIX-7] Gắn lời bài hát vào đúng nốt nhạc.
-        - Tự động phát hiện vùng lời (không hardcode l1+10 đến l1+75).
-        - Tolerance scale theo interline (không cứng 80px).
-        - Hỗ trợ multi-verse (nhiều dòng lời dưới cùng 1 khuông).
+        [FIX-7] Gắn lời bài hát tiếng Việt và hợp âm vào nốt nhạc từ tập từ đã trích xuất.
         """
-        try:
-            import pytesseract
-        except ImportError:
+        if not noteheads or not page_words:
             return
 
         l1 = staff_lines[-1]
         interline = (staff_lines[-1] - staff_lines[0]) / (len(staff_lines) - 1)
 
-        # Auto-detect lyric zone: từ l1 + half_step đến next_staff_top (hoặc l1 + 5*interline)
-        lyric_top = int(l1 + interline * 0.3)
-        lyric_bot = int(next_staff_top - interline * 0.5) if next_staff_top else int(l1 + interline * 5)
-        lyric_bot = min(lyric_bot, lyric_top + int(interline * 5))  # Tối đa 5 interline
+        lyric_top = int(l1 + interline * 0.25)
+        lyric_bot = int(next_staff_top - interline * 0.4) if next_staff_top else int(l1 + interline * 5)
+        lyric_bot = min(lyric_bot, lyric_top + int(interline * 5))
 
         if lyric_bot <= lyric_top:
             return
 
-        full_img = cv2.imread(img_path)
-        if full_img is None:
+        # Lọc các từ thuộc dải lời của khuông này
+        staff_words = [
+            (cx, cy, txt) for cx, cy, txt in page_words
+            if lyric_top <= cy <= lyric_bot and cx >= int(interline * 2.0)
+        ]
+
+        if not staff_words:
             return
-
-        # Crop vùng lời theo chiều ngang và chiều dọc
-        left_margin = int(interline * 3)  # Bỏ qua vùng số thứ tự nhịp bên trái
-        lyric_crop = full_img[lyric_top:lyric_bot, left_margin:w]
-
-        if lyric_crop.size == 0:
-            return
-
-        # Chạy Tesseract với config tối ưu cho tiếng Việt
-        custom_config = r'--oem 3 --psm 7 -c preserve_interword_spaces=1'
-        try:
-            data = pytesseract.image_to_data(
-                lyric_crop, lang='vie+eng',
-                config=custom_config,
-                output_type=pytesseract.Output.DICT
-            )
-        except Exception:
-            return
-
-        tolerance_x = interline * 2.0  # [FIX-7] Scale theo interline, không cứng 80px
-        n_boxes = len(data['text'])
-
-        # Phân nhóm theo dòng (line_num) để hỗ trợ multi-verse
-        lines_words: dict[int, list[tuple[float, str]]] = {}
-        for i in range(n_boxes):
-            text = str(data['text'][i]).strip()
-            conf = int(data['conf'][i]) if str(data['conf'][i]).lstrip('-').isdigit() else 0
-            if not text or conf < 25:
-                continue
-            line_num = data['line_num'][i]
-            word_cx = left_margin + data['left'][i] + data['width'][i] / 2.0
-            lines_words.setdefault(line_num, []).append((word_cx, text))
 
         # Làm sạch và chuẩn hóa lỗi OCR tiếng Việt phổ biến
         def clean_vietnamese_ocr(txt: str) -> str:
@@ -674,21 +701,34 @@ class ComputerVisionOmrEngine:
                 'cﬂng': 'cũng', 'ngﬂn': 'ngàn', 'trﬂn': 'trọn',
                 'tﬁm': 'tấm', 'tﬂm': 'tấm', '|': '', '_': '',
             }
+            res = txt
             for wrong, right in replacements.items():
-                if txt.lower() == wrong:
-                    return right.upper() if txt.isupper() else right
-            return txt
+                if res.lower() == wrong:
+                    res = right.upper() if res.isupper() else right
+            return res
+
+        # Nhóm theo dòng dọc (Y) để phân biệt các Verse khác nhau
+        staff_words.sort(key=lambda w: w[1])
+        verse_clusters: list[list[tuple[float, float, str]]] = []
+        cluster_y_thresh = interline * 0.8
+
+        for cx, cy, text in staff_words:
+            added = False
+            for v_words in verse_clusters:
+                avg_y = np.mean([w[1] for w in v_words]) if len(v_words) > 0 else cy
+                if abs(cy - avg_y) < cluster_y_thresh:
+                    v_words.append((cx, cy, clean_vietnamese_ocr(text)))
+                    added = True
+                    break
+            if not added:
+                verse_clusters.append([(cx, cy, clean_vietnamese_ocr(text))])
+
+        tolerance_x = interline * 2.5
 
         # Gán lời từng verse vào nốt nhạc theo thứ tự không gian ngang
-        for verse_idx, (_, words) in enumerate(sorted(lines_words.items())):
-            words.sort(key=lambda w: w[0])
-            cleaned_words = [(wx, clean_vietnamese_ocr(wt)) for wx, wt in words if len(wt) > 0]
-            
-            # Gán từng từ vào nốt nhạc tương ứng theo tọa độ X
-            for word_cx, word_text in cleaned_words:
-                if not noteheads:
-                    continue
-                # Tìm nốt chưa có lyric của verse này và có khoảng cách X gần nhất
+        for verse_idx, v_words in enumerate(verse_clusters):
+            v_words.sort(key=lambda w: w[0])  # Sort by X
+            for word_cx, _, word_text in v_words:
                 candidates = [n for n in noteheads if f'lyric_{verse_idx}' not in n]
                 if not candidates:
                     candidates = noteheads
@@ -835,6 +875,11 @@ class ComputerVisionOmrEngine:
         staves_data = []
         total_notes = 0
 
+        # 1. Trích xuất OCR toàn trang một lần duy nhất
+        page_words = self.extract_page_ocr(png_path, w, h)
+        if self.debug:
+            print(f"[CV-OMR][DEBUG] extract_page_ocr: {len(page_words)} từ phát hiện trên trang")
+
         for s_idx, staff_lines in enumerate(staves):
             next_staff_top = staves[s_idx + 1][0] if s_idx + 1 < len(staves) else None
 
@@ -845,7 +890,7 @@ class ComputerVisionOmrEngine:
 
             barlines = self.detect_barlines(bin_img, staff_lines, w)
             noteheads = self.detect_noteheads(bin_img, staff_lines, w)
-            self.match_lyrics(noteheads, staff_lines, png_path, w, next_staff_top)
+            self.match_lyrics(noteheads, staff_lines, page_words, w, next_staff_top)
 
             # Phân chia nốt vào ô nhịp
             interline = (staff_lines[-1] - staff_lines[0]) / (len(staff_lines) - 1)
@@ -868,6 +913,7 @@ class ComputerVisionOmrEngine:
 
         title = Path(png_path).stem
         xml_str = self.build_musicxml(staves_data, title)
+        os.makedirs(output_dir, exist_ok=True)
         xml_out = os.path.join(output_dir, "cv_score.musicxml")
         with open(xml_out, 'w', encoding='utf-8') as f:
             f.write(xml_str)

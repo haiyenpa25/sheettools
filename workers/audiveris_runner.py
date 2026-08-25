@@ -204,6 +204,18 @@ def process(input_path: str, output_dir: str, audiveris_hint=None) -> dict:
     omr_out_dir = os.path.join(output_dir, "omr_out")
     result = run_audiveris(final_png, omr_out_dir, audiveris_cli)
 
+    # Nếu Audiveris không xuất được MusicXML hợp lệ, tự động chuyển sang ComputerVisionOmrEngine
+    if not result.get("success") or not result.get("xml_path"):
+        print("[Hybrid-OMR] Audiveris did not yield MusicXML, falling back to ComputerVisionOmrEngine...")
+        try:
+            from cv_omr_engine import ComputerVisionOmrEngine
+            cv_engine = ComputerVisionOmrEngine()
+            cv_res = cv_engine.process(input_path, output_dir)
+            if cv_res.get("success"):
+                result = cv_res
+        except Exception as e:
+            print(f"[Hybrid-OMR] CV fallback notice: {e}")
+
     # Ghi log ra file
     log_path = os.path.join(output_dir, "audiveris.log")
     if "log" in result:

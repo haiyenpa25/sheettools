@@ -47,7 +47,10 @@ echo "    -> PASS: Slash chord G/B parsed successfully!\n\n";
 // Test 4: Conversion Project creation & storage workflow
 $conversionService = new ConversionService();
 $tempFile = tempnam(sys_get_temp_dir(), 'test_sheet_');
-$samplePdf = dirname(__DIR__, 2) . '/storage/projects/04352454-f909-4511-b944-d9f61f0857f8/source/1.pdf';
+$samplePdf = dirname(__DIR__, 2) . '/public/samples/1.pdf';
+if (!file_exists($samplePdf)) {
+    $samplePdf = dirname(__DIR__, 2) . '/public/samples/002_tu_coi_long/source.pdf';
+}
 if (file_exists($samplePdf)) {
     copy($samplePdf, $tempFile);
 } else {
