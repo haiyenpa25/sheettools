@@ -419,42 +419,90 @@
               ></div>
             </div>
 
-            <!-- Default Interactive Paper Mock if no uploaded image -->
+            <!-- ════════ HIGH-PRECISION REALISTIC MUSIC SCORE TRACING CANVAS ════════ -->
             <template v-else>
-              <div class="text-center mb-4 border-b border-slate-200 pb-2">
-                <h4 class="font-bold text-sm text-slate-900">{{ meta.title }}</h4>
-                <p class="text-[11px] text-slate-500">{{ meta.composer }} • Bản Scan Gốc</p>
+              <!-- Zone 1: Header Tracing Overlay -->
+              <div class="text-center mb-6 border-b-2 border-slate-300 pb-3 relative group">
+                <div class="inline-block relative">
+                  <h3 class="font-bold text-base text-slate-900 tracking-wide uppercase">{{ meta.title || 'TIÊU ĐỀ BÀI HÁT' }}</h3>
+                  <div class="flex items-center justify-between text-xs text-slate-600 mt-1 gap-6">
+                    <span class="italic text-slate-500">{{ meta.lyricist || 'Lời: Thánh Ca' }}</span>
+                    <span class="font-semibold text-slate-800">{{ meta.composer || 'Nhạc: Khuyết danh' }}</span>
+                  </div>
+                </div>
+                <span class="absolute top-0 right-0 text-[9px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded border border-emerald-300">
+                  Zone 1: Header
+                </span>
               </div>
 
-              <!-- Simulated Staves with interactive Measure bounding boxes -->
-              <div class="space-y-4">
-                <div v-for="system in 4" :key="system" class="space-y-1">
-                  <div class="grid grid-cols-4 gap-1 relative">
-                    <div
-                      v-for="m in 4"
-                      :key="m"
-                      class="h-14 border border-slate-300 rounded-xs relative p-1 cursor-pointer transition-all hover:bg-sky-50 flex flex-col justify-between"
-                      :class="[
-                        activeMeasure === (system - 1) * 4 + m ? 'border-2 border-primary bg-sync-active-highlight ring-2 ring-primary/20' : '',
-                        hasIssue((system - 1) * 4 + m) ? 'border-2 border-error bg-omr-issue-highlight' : ''
-                      ]"
-                      @click="selectMeasure((system - 1) * 4 + m)"
-                    >
-                      <!-- Staff lines -->
-                      <div class="space-y-1 my-auto pointer-events-none opacity-40">
-                        <div v-for="l in 4" :key="l" class="h-px bg-slate-800 w-full"></div>
-                      </div>
-                      <!-- Measure Number -->
-                      <span class="text-[9px] font-mono-label font-bold text-slate-500 absolute top-0.5 left-1">
-                        {{ (system - 1) * 4 + m }}
-                      </span>
+              <!-- Zone 2 & 3: Staves & Measures Precision Tracing -->
+              <div class="space-y-6 relative">
+                <div
+                  v-for="(sys, sIdx) in tracedSystems"
+                  :key="sIdx"
+                  class="relative bg-slate-50/50 rounded-lg p-2 border border-slate-200 hover:border-primary/40 transition-all"
+                >
+                  <!-- Staff Label & Zone Info -->
+                  <div class="flex items-center justify-between mb-1 px-1 text-[10px] text-slate-500 font-mono">
+                    <span class="font-bold text-blue-700">Khuông #{{ sIdx + 1 }}</span>
+                    <span class="text-amber-700 font-medium">Lời Verse {{ activeVerse }}</span>
+                  </div>
 
-                      <!-- Issue warning icon if any -->
-                      <span
-                        v-if="hasIssue((system - 1) * 4 + m)"
-                        class="material-symbols-outlined text-xs text-error absolute top-0.5 right-1"
-                        title="Có cảnh báo OCR tại ô nhịp này"
-                      >error</span>
+                  <!-- Staves Grid & Measures -->
+                  <div class="grid relative select-none" :style="{ gridTemplateColumns: `repeat(${sys.measures.length}, minmax(0, 1fr))` }">
+                    <div
+                      v-for="m in sys.measures"
+                      :key="m.measureNumber"
+                      class="h-20 border-r border-slate-400 relative p-1.5 cursor-pointer transition-all hover:bg-sky-50/80 flex flex-col justify-between group"
+                      :class="[
+                        activeMeasure === m.measureNumber ? 'bg-sky-100/90 ring-2 ring-primary ring-inset rounded-xs' : '',
+                        hasIssue(m.measureNumber) ? 'bg-amber-50/80 ring-2 ring-warning ring-inset' : '',
+                        m.measureNumber === sys.measures[0].measureNumber ? 'border-l border-slate-400' : ''
+                      ]"
+                      @click="selectMeasure(m.measureNumber)"
+                    >
+                      <!-- 5 Real Staff Lines Tracing -->
+                      <div class="absolute inset-x-0 top-3 bottom-5 flex flex-col justify-between pointer-events-none px-0.5 opacity-60">
+                        <div v-for="l in 5" :key="l" class="h-[1.5px] bg-slate-800 w-full"></div>
+                      </div>
+
+                      <!-- Measure Badge & Harmony -->
+                      <div class="flex items-center justify-between relative z-10">
+                        <span
+                          class="text-[9px] font-mono font-bold px-1 rounded shadow-2xs"
+                          :class="activeMeasure === m.measureNumber ? 'bg-primary text-white' : 'bg-slate-200 text-slate-700'"
+                        >
+                          #{{ m.measureNumber }}
+                        </span>
+                        <!-- Measure Harmony Chord Badge -->
+                        <span v-if="m.chord" class="text-[10px] font-mono font-bold text-primary bg-primary/10 px-1 rounded border border-primary/20">
+                          {{ m.chord }}
+                        </span>
+                      </div>
+
+                      <!-- Note Pitch Heads & Stems Tracing Mock -->
+                      <div class="relative z-10 flex items-center justify-around h-7 my-auto px-1">
+                        <div
+                          v-for="(n, nIdx) in m.notes"
+                          :key="nIdx"
+                          class="flex flex-col items-center group/note relative"
+                          :title="n.step + (n.octave || 4)"
+                        >
+                          <!-- Notehead -->
+                          <div
+                            class="w-2.5 h-2 rounded-full border transition-all"
+                            :class="[
+                              n.isRest ? 'w-2 h-3 border-none bg-slate-700 rounded-none' : '',
+                              activeMeasure === m.measureNumber ? 'bg-primary border-primary' : 'bg-slate-800 border-slate-800'
+                            ]"
+                          ></div>
+                        </div>
+                      </div>
+
+                      <!-- Zone 3: Lyric Syllables beneath Staff -->
+                      <div class="relative z-10 text-center truncate text-[11px] font-semibold text-slate-800 pt-1 border-t border-dashed border-slate-300">
+                        {{ m.lyricText || '—' }}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1347,6 +1395,78 @@ function applyCustomZonesAndRescan() {
   refreshAfterXmlMutation();
   alert(`✨ Đã áp dụng ${interactiveZones.length} vùng tùy chỉnh (${headerCount} Header, ${notationCount} Khuông nốt, ${lyricCount} Lời) và tối ưu hóa nhận diện thành công!`);
 }
+
+// ════════════════ DYNAMIC STAFF & MEASURE PRECISION TRACER ════════════════
+export interface TracedMeasure {
+  measureNumber: number;
+  chord?: string;
+  lyricText?: string;
+  notes: ParsedNoteDetail[];
+}
+
+export interface TracedSystem {
+  systemIndex: number;
+  measures: TracedMeasure[];
+}
+
+const tracedSystems = computed<TracedSystem[]>(() => {
+  if (!xmlEngine) {
+    return Array.from({ length: 4 }, (_, sIdx) => ({
+      systemIndex: sIdx + 1,
+      measures: Array.from({ length: 4 }, (_, mIdx) => {
+        const mNum = sIdx * 4 + mIdx + 1;
+        return {
+          measureNumber: mNum,
+          chord: harmonies.value.find(h => h.measureNumber === mNum)?.displayText,
+          lyricText: (lyricsMap.value[activeVerse.value] || []).find(l => l.measureNumber === mNum)?.text,
+          notes: [{ id: `n_${mNum}_1`, measureNumber: mNum, noteIndex: 0, step: 'G', octave: 4, accidental: null, duration: 'quarter', isRest: false, isDotted: false, voice: 1 }]
+        };
+      })
+    }));
+  }
+
+  let maxM = 16;
+  const allNotes: Record<number, ParsedNoteDetail[]> = {};
+  for (let m = 1; m <= 32; m++) {
+    const nList = xmlEngine.getNotesInMeasure(m);
+    if (nList && nList.length > 0) {
+      allNotes[m] = nList;
+      maxM = Math.max(maxM, m);
+    }
+  }
+
+  const measuresPerSystem = maxM > 20 ? 5 : 4;
+  const sysCount = Math.ceil(maxM / measuresPerSystem);
+
+  const systems: TracedSystem[] = [];
+  for (let s = 0; s < sysCount; s++) {
+    const sysMeasures: TracedMeasure[] = [];
+    for (let m = 1; m <= measuresPerSystem; m++) {
+      const mNum = s * measuresPerSystem + m;
+      if (mNum <= maxM) {
+        const chord = harmonies.value.find(h => h.measureNumber === mNum)?.displayText;
+        const lyrics = (lyricsMap.value[activeVerse.value] || []).filter(l => l.measureNumber === mNum);
+        const lyricText = lyrics.map(l => l.text).join(' ');
+        const notes = allNotes[mNum] || [{ id: `n_${mNum}_1`, measureNumber: mNum, noteIndex: 0, step: 'G', octave: 4, accidental: null, duration: 'quarter', isRest: false, isDotted: false, voice: 1 }];
+
+        sysMeasures.push({
+          measureNumber: mNum,
+          chord,
+          lyricText,
+          notes
+        });
+      }
+    }
+    if (sysMeasures.length > 0) {
+      systems.push({
+        systemIndex: s + 1,
+        measures: sysMeasures
+      });
+    }
+  }
+
+  return systems;
+});
 
 // Playback state
 const isPlaying = ref(false);
