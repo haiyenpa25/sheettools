@@ -174,11 +174,17 @@ def process(input_path: str, output_dir: str, audiveris_hint=None) -> dict:
 
     audiveris_cli = find_audiveris_cli(audiveris_hint)
     if not audiveris_cli:
-        return {
-            "success": False,
-            "error": "Không tìm thấy Audiveris CLI. Hãy cài Audiveris 5.11.0 tại: https://github.com/Audiveris/audiveris/releases",
-            "xml_path": None
-        }
+        print("[Hybrid-OMR] Audiveris CLI not found, running pure Computer Vision OMR Engine...")
+        try:
+            from cv_omr_engine import ComputerVisionOmrEngine
+            cv_engine = ComputerVisionOmrEngine()
+            return cv_engine.process(input_path, output_dir)
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"Lỗi thực thi CV OMR: {e}",
+                "xml_path": None
+            }
 
     ext = Path(input_path).suffix.lower()
 
