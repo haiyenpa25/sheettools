@@ -112,9 +112,10 @@ class ExportService
     protected function packageMxl(string $sourceXmlPath, string $targetMxlPath): bool
     {
         if (!class_exists('ZipArchive')) {
-            // Nếu không có Zip extension, fallback copy sang .musicxml
-            copy($sourceXmlPath, str_replace('.mxl', '.musicxml', $targetMxlPath));
-            return false;
+            $exporterPy = dirname(__DIR__, 2) . '/workers/xml_tools/musescore_exporter.py';
+            $cmd = sprintf('python %s --input %s --output %s --format mxl 2>&1', escapeshellarg($exporterPy), escapeshellarg($sourceXmlPath), escapeshellarg($targetMxlPath));
+            @exec($cmd);
+            return file_exists($targetMxlPath) && filesize($targetMxlPath) > 50;
         }
 
         $zip = new ZipArchive();

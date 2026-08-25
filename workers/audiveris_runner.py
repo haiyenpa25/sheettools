@@ -37,26 +37,16 @@ def pdf_to_png_pages(pdf_path: str, output_dir: str, dpi: int = 300) -> list:
     return pages_out
 
 
-# ───────── Tiền xử lý ảnh nâng cao (OpenCV CLAHE & Denoising) ─────────
+# ───────── Tiền xử lý ảnh nâng cao (OpenCV Deskew, CLAHE & Denoising) ─────────
 def preprocess_image(png_path: str, out_path: str) -> str:
-    """Tăng tương phản thông minh và khử nhiễu để giữ nguyên vẹn thanh nối nốt và dòng kẻ."""
+    """Tăng tương phản thông minh, khử đổ bóng và chỉnh góc nghiêng (Deskew) trước khi đưa vào OMR."""
     try:
-        import cv2
-        img = cv2.imread(png_path, cv2.IMREAD_GRAYSCALE)
-        if img is None:
-            return png_path
-
-        # 1. Khử nhiễu nhẹ
-        denoised = cv2.fastNlMeansDenoising(img, h=7)
-
-        # 2. Tăng tương phản bằng CLAHE (Contrast Limited Adaptive Histogram Equalization)
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-        contrast = clahe.apply(denoised)
-
-        cv2.imwrite(out_path, contrast)
-        return out_path
-    except ImportError:
-        return png_path
+        from preprocessing.pipeline import preprocess_image as adv_preprocess
+        if adv_preprocess(png_path, out_path, enable_deskew=True, enable_shadow_removal=True):
+            return out_path
+    except Exception as e:
+        print(f"[AudiverisRunner] Preprocessing notice: {e}")
+    return png_path
 
 
 # ───────── Tìm Audiveris CLI ─────────

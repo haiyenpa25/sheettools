@@ -49,13 +49,13 @@ import numpy as np
 #  idx 12: C6   idx 13: D6
 
 _BASE_PITCH: dict[int, tuple[str, int]] = {
-    -6: ('C', 3), -5: ('D', 3), -4: ('E', 3),
+    -8: ('D', 3), -7: ('E', 3), -6: ('F', 3), -5: ('G', 3),
     -4: ('A', 3), -3: ('B', 3), -2: ('C', 4), -1: ('D', 4),
      0: ('E', 4),
      1: ('F', 4),  2: ('G', 4),  3: ('A', 4),  4: ('B', 4),
      5: ('C', 5),  6: ('D', 5),  7: ('E', 5),  8: ('F', 5),
      9: ('G', 5), 10: ('A', 5), 11: ('B', 5), 12: ('C', 6),
-    13: ('D', 6),
+    13: ('D', 6), 14: ('E', 6), 15: ('F', 6), 16: ('G', 6),
 }
 
 # Vòng thứ 5 — ánh xạ số dấu thăng/giáng sang các nốt cần dấu hóa
@@ -375,10 +375,10 @@ class ComputerVisionOmrEngine:
                 positions.append((space_y, staff_pos_idx + 1))
 
         # Mở rộng thêm khoảng dưới Line 1 và trên Line 5 (ledger lines)
-        for ext in range(1, 5):
+        for ext in range(1, 9):
             positions.append((l1 + ext * half_step, -ext))
         top_line_y = staff_lines[0]
-        for ext in range(1, 5):
+        for ext in range(1, 9):
             positions.append((top_line_y - ext * half_step, len(staff_lines) * 2 - 2 + ext))
 
         # Tìm vị trí gần cy nhất
