@@ -204,6 +204,112 @@ class VietnameseUniversalOcrEngine:
 
         return results
 
+    def decompose_sheet_3zones(self, img_input) -> dict:
+        """
+        Phân tích tách trang sheet nhạc làm 3 VÙNG SPATIAL ĐỘC LẬP:
+        - ZONE 1: Header Zone (Tiêu đề, Tác giả, Lời dịch, Tuyển tập)
+        - ZONE 2: Pure Notation Sheet (Bản nhạc đã xoá sạch toàn bộ chữ để OMR chỉ nhận diện nốt & khuông)
+        - ZONE 3: Lyrics & Verses Zone (Lời bài hát tách theo Verse 1..N, Điệp khúc + Hợp âm trên khuông)
+        """
+        if isinstance(img_input, str):
+            img = cv2.imread(img_input)
+        else:
+            img = img_input.copy()
+
+        if img is None:
+            return {'header': {}, 'pure_notation_img': None, 'lyrics': [], 'harmonies': []}
+
+        h, w = img.shape[:2]
+        rapid = self.get_rapid_ocr()
+        clean_text_img = self.isolate_text_layer(img)
+
+        ocr_results = None
+        if rapid:
+            ocr_results, _ = rapid(clean_text_img)
+            if not ocr_results:
+                ocr_results, _ = rapid(img)
+
+        # 1. Phát hiện vị trí các khuông nhạc (Staff Lines)
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+        h_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (int(w * 0.20), 1))
+        lines_only = cv2.morphologyEx(binary, cv2.MORPH_OPEN, h_kernel)
+        proj = np.sum(lines_only, axis=1) / (w * 255.0)
+
+        staff_peaks = np.where(proj > 0.04)[0]
+        first_staff_y = staff_peaks[0] if len(staff_peaks) > 0 else int(h * 0.18)
+
+        # 2. Phân loại và tạo Pure Notation Sheet (Xóa toàn bộ chữ)
+        pure_notation_img = img.copy()
+        header_items = []
+        lyric_items = []
+        harmony_items = []
+
+        import re
+        chord_regex = re.compile(r'^[A-Ga-g][#b♭♯]?(m|min|maj|dim|aug|sus|7|9|add)?(/[A-Ga-g][#b♭♯]?)?$')
+
+        for item in ocr_results or []:
+            box, raw_text, score = item
+            x1, y1 = max(0, int(box[0][0])), max(0, int(box[0][1]))
+            x2, y2 = min(w, int(box[2][0])), min(h, int(box[2][1]))
+            cx = (x1 + x2) / 2.0
+            cy = (y1 + y2) / 2.0
+
+            # Nhận diện chữ tiếng Việt bằng VietOCR
+            crop = img[y1:y2, x1:x2]
+            v_text = self.recognize_crop_vietocr(crop) if (x2 - x1 > 8 and y2 - y1 > 6) else ""
+            text = self.clean_syllable(v_text if v_text else str(raw_text))
+
+            if not text:
+                continue
+
+            # ZONE 1: HEADER (Phía trên khuông nhạc đầu tiên)
+            if cy < first_staff_y - 12:
+                header_items.append({'text': text, 'x1': x1, 'y1': y1, 'x2': x2, 'y2': y2, 'cx': cx, 'cy': cy})
+            else:
+                # ZONE 3: HỢP ÂM HAY LỜI BÀI HÁT
+                if chord_regex.match(text.strip()):
+                    harmony_items.append({'chord': text.strip(), 'x': cx, 'y': cy})
+                else:
+                    lyric_items.append({'text': text, 'x': cx, 'y': cy, 'x1': x1, 'x2': x2, 'y1': y1, 'y2': y2})
+
+            # ZONE 2: MASK TOÀN BỘ CHỮ TRÊN BẢN NHẠC
+            pad = 2
+            px1, py1 = max(0, x1 - pad), max(0, y1 - pad)
+            px2, py2 = min(w, x2 + pad), min(h, y2 + pad)
+            pure_notation_img[py1:py2, px1:px2] = (255, 255, 255)
+
+        # Trích xuất metadata tiêu đề và tác giả từ Header
+        title = ""
+        composer = ""
+        lyricist = ""
+        category = ""
+
+        for h_item in sorted(header_items, key=lambda x: x['cy']):
+            txt = h_item['text']
+            if any(k in txt.lower() for k in ['tôn vinh', 'thánh ca', 'tuyển tập']):
+                category = txt
+            elif not title and len(txt) > 3:
+                title = txt
+            elif not composer and (h_item['cx'] > w * 0.6 or any(c in txt.lower() for c in ['nhạc', 'lời', 'nguyễn', 'tiến', 'felice'])):
+                composer = txt
+            elif not lyricist:
+                lyricist = txt
+
+        return {
+            'header': {
+                'title': title,
+                'composer': composer,
+                'lyricist': lyricist,
+                'category': category,
+                'raw_items': header_items,
+            },
+            'pure_notation_img': pure_notation_img,
+            'lyrics': lyric_items,
+            'harmonies': harmony_items,
+            'first_staff_y': int(first_staff_y),
+        }
+
     def heal_musicxml_file(self, xml_path: str, source_img_path: str = None) -> bool:
         """
         Quét và phục hồi toàn diện tiếng Việt cho tệp MusicXML bất kỳ.
@@ -241,3 +347,7 @@ _engine = VietnameseUniversalOcrEngine()
 
 def heal_vietnamese_universal(xml_path: str, source_img_path: str = None) -> bool:
     return _engine.heal_musicxml_file(xml_path, source_img_path)
+
+def decompose_sheet_3zones(img_input) -> dict:
+    return _engine.decompose_sheet_3zones(img_input)
+

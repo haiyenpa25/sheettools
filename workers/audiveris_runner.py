@@ -210,7 +210,21 @@ def process(input_path: str, output_dir: str, audiveris_hint=None) -> dict:
     preprocessed_png = os.path.join(output_dir, "preprocessed.png")
     final_png = preprocess_image(source_png, preprocessed_png)
 
-    # Bước 3: Chạy Audiveris OMR + music21 Auto-Healer
+    # Bước 2b: 3-Zone Spatial Decomposition (Tách Header, Bản Nhạc Nốt Thuần Khiết, Lời & Hợp Âm)
+    decomp_meta = None
+    try:
+        from xml_tools.vietnamese_universal_ocr import decompose_sheet_3zones
+        decomp = decompose_sheet_3zones(final_png)
+        if decomp.get("pure_notation_img") is not None:
+            import cv2
+            pure_png = os.path.join(output_dir, "pure_notation.png")
+            cv2.imwrite(pure_png, decomp["pure_notation_img"])
+            final_png = pure_png
+            decomp_meta = decomp
+    except Exception as e_decomp:
+        print(f"[AudiverisRunner] 3-zone decomposition notice: {e_decomp}")
+
+    # Bước 3: Chạy Audiveris OMR trên bản nhạc đã làm sạch + music21 Auto-Healer
     omr_out_dir = os.path.join(output_dir, "omr_out")
     result = run_audiveris(final_png, omr_out_dir, audiveris_cli)
 

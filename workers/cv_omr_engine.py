@@ -856,8 +856,23 @@ class ComputerVisionOmrEngine:
     # ════════════════════════════════════════════════════════════
 
     def process_single_page(self, png_path: str, output_dir: str) -> dict:
-        """Xử lý 1 trang ảnh PNG → MusicXML."""
-        gray_img = cv2.imread(png_path, cv2.IMREAD_GRAYSCALE)
+        """Xử lý 1 trang ảnh PNG → MusicXML bằng kiến trúc 3-Zone Spatial Decomposition."""
+        # 1. 3-Zone Spatial Decomposition (Header, Pure Notation Sheet, Lyrics/Verses)
+        decomp_meta = None
+        pure_img = None
+        try:
+            from xml_tools.vietnamese_universal_ocr import decompose_sheet_3zones
+            decomp_meta = decompose_sheet_3zones(png_path)
+            pure_img = decomp_meta.get('pure_notation_img')
+        except Exception as e:
+            print(f"[CV-OMR] 3-zone decomposition notice: {e}")
+
+        # Dùng ảnh đã xóa sạch chữ (Pure Notation Sheet) để nhận diện nốt & khuông
+        if pure_img is not None:
+            gray_img = cv2.cvtColor(pure_img, cv2.COLOR_BGR2GRAY) if len(pure_img.shape) == 3 else pure_img
+        else:
+            gray_img = cv2.imread(png_path, cv2.IMREAD_GRAYSCALE)
+
         if gray_img is None:
             return {"success": False, "error": f"Không đọc được ảnh: {png_path}"}
 
@@ -873,10 +888,8 @@ class ComputerVisionOmrEngine:
         staves_data = []
         total_notes = 0
 
-        # 1. Trích xuất OCR toàn trang một lần duy nhất
+        # 2. Trích xuất OCR toàn trang
         page_words = self.extract_page_ocr(png_path, w, h)
-        if self.debug:
-            print(f"[CV-OMR][DEBUG] extract_page_ocr: {len(page_words)} từ phát hiện trên trang")
 
         for s_idx, staff_lines in enumerate(staves):
             next_staff_top = staves[s_idx + 1][0] if s_idx + 1 < len(staves) else None
@@ -909,7 +922,7 @@ class ComputerVisionOmrEngine:
             staves_data.append({'staff_lines': staff_lines, 'measures': measures})
             total_notes += len(noteheads)
 
-        title = Path(png_path).stem
+        title = decomp_meta['header'].get('title') if (decomp_meta and decomp_meta.get('header', {}).get('title')) else Path(png_path).stem
         xml_str = self.build_musicxml(staves_data, title)
         os.makedirs(output_dir, exist_ok=True)
         xml_out = os.path.join(output_dir, "cv_score.musicxml")
