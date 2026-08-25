@@ -742,5 +742,158 @@ export class MusicXmlEngine {
     if (modified) this.saveState();
     return modified;
   }
+
+  // ═════════════════════════════════════════════════════════════════════════
+  // ─── 3-IN-1 MULTI-VERSION EXPORT ENGINES ───
+  // ═════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Version 2: Xuất bản MusicXML không lời (Instrumental / Melody Sheet)
+   */
+  public getInstrumentalXml(): string {
+    const cloneDoc = this.doc.cloneNode(true) as XMLDocument;
+    cloneDoc.querySelectorAll('lyric').forEach(l => l.remove());
+    return new XMLSerializer().serializeToString(cloneDoc);
+  }
+
+  /**
+   * Dịch chuyển hợp âm đơn lẻ theo số bán âm
+   */
+  public formatTransposedChord(chord: string, semitones: number): string {
+    if (!chord) return '';
+    if (semitones === 0) return chord;
+
+    const notesCycle = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    const chordRegex = /^([A-G][#b]?)([^/]*)(?:\/([A-G][#b]?))?$/;
+    const match = chord.trim().match(chordRegex);
+    if (!match) return chord;
+
+    const root = match[1];
+    const modifier = match[2] || '';
+    const bass = match[3];
+
+    const transposeNote = (note: string) => {
+      let step = note[0].toUpperCase();
+      let alter = note.length > 1 ? (note[1] === '#' ? 1 : (note[1] === 'b' ? -1 : 0)) : 0;
+      let idx = notesCycle.indexOf(step);
+      if (alter === 1) idx = (idx + 1) % 12;
+      else if (alter === -1) idx = (idx + 11) % 12;
+      let newIdx = ((idx + semitones) % 12 + 12) % 12;
+      return notesCycle[newIdx];
+    };
+
+    const newRoot = transposeNote(root);
+    const newBass = bass ? `/${transposeNote(bass)}` : '';
+    return `${newRoot}${modifier}${newBass}`;
+  }
+
+  /**
+   * Version 3: Xuất bản Hợp Âm Chuẩn (HopAmChuan / Lead Sheet Text)
+   */
+  public generateHopAmChuanText(transposeSemitones: number = 0, style: 'inline' | 'above' = 'above'): string {
+    const meta = this.getMetadata();
+    const title = meta.title || 'BẢN NHẠC';
+    const composer = meta.composer ? `Sáng tác: ${meta.composer}` : '';
+    const key = this.getKeySignature();
+    const time = this.getTimeSignature();
+
+    const harmonies = this.extractHarmonies();
+    const lyricsMap = this.extractLyrics();
+    const verse1 = lyricsMap[1] || [];
+
+    const harmByMeasure: Record<number, string[]> = {};
+    harmonies.forEach(h => {
+      if (!harmByMeasure[h.measureNumber]) harmByMeasure[h.measureNumber] = [];
+      harmByMeasure[h.measureNumber].push(this.formatTransposedChord(h.displayText, transposeSemitones));
+    });
+
+    const lyricByMeasure: Record<number, string[]> = {};
+    verse1.forEach(l => {
+      if (!lyricByMeasure[l.measureNumber]) lyricByMeasure[l.measureNumber] = [];
+      if (l.text.trim()) lyricByMeasure[l.measureNumber].push(l.text.trim());
+    });
+
+    let maxMeasure = 1;
+    this.doc.querySelectorAll('measure').forEach(m => {
+      const num = parseInt(m.getAttribute('number') || '1', 10);
+      if (num > maxMeasure) maxMeasure = num;
+    });
+
+    const currentKey = this.formatTransposedChord(key, transposeSemitones);
+    let output = `[${title.toUpperCase()}]\n`;
+    if (composer) output += `${composer}\n`;
+    output += `Tone: [${currentKey}] - Nhịp: ${time.beats}/${time.beatType}\n`;
+    output += `═══════════════════════════════════════════════════════════\n\n`;
+
+    if (style === 'inline') {
+      let lineBuf = '';
+      for (let m = 1; m <= maxMeasure; m++) {
+        const chords = harmByMeasure[m] || [];
+        const words = lyricByMeasure[m] || [];
+        const chordStr = chords.map(c => `[${c}]`).join(' ');
+        const wordStr = words.join(' ');
+
+        if (chordStr && wordStr) {
+          lineBuf += `${chordStr} ${wordStr} `;
+        } else if (chordStr) {
+          lineBuf += `${chordStr} `;
+        } else if (wordStr) {
+          lineBuf += `${wordStr} `;
+        }
+
+        if (m % 4 === 0 || wordStr.endsWith('.') || wordStr.endsWith('!')) {
+          output += `${lineBuf.trim()}\n`;
+          lineBuf = '';
+        }
+      }
+      if (lineBuf.trim()) output += `${lineBuf.trim()}\n`;
+    } else {
+      // Style: above (hợp âm trên đầu lời)
+      let chordLineBuf: string[] = [];
+      let lyricLineBuf: string[] = [];
+
+      for (let m = 1; m <= maxMeasure; m++) {
+        const chords = harmByMeasure[m] || [];
+        const words = lyricByMeasure[m] || [];
+        const chordStr = chords.map(c => `[${c}]`).join(' ');
+        const wordStr = words.join(' ');
+
+        if (chordStr || wordStr) {
+          chordLineBuf.push(chordStr ? chordStr : ' '.repeat(Math.max(4, wordStr.length)));
+          lyricLineBuf.push(wordStr ? wordStr : ' '.repeat(Math.max(4, chordStr.length)));
+
+          if (lyricLineBuf.length >= 4 || wordStr.endsWith('.') || wordStr.endsWith('!') || wordStr.endsWith(',')) {
+            output += `${chordLineBuf.join('  ')}\n`;
+            output += `${lyricLineBuf.join(' ')}\n\n`;
+            chordLineBuf = [];
+            lyricLineBuf = [];
+          }
+        }
+      }
+      if (lyricLineBuf.length > 0) {
+        output += `${chordLineBuf.join('  ')}\n`;
+        output += `${lyricLineBuf.join(' ')}\n`;
+      }
+    }
+
+    return output.trim();
+  }
+
+  /**
+   * Version 3: Xuất định dạng ChordPro chuẩn quốc tế (.cho / .pro)
+   */
+  public generateChordProText(transposeSemitones: number = 0): string {
+    const meta = this.getMetadata();
+    const title = meta.title || 'Bản Nhạc';
+    const key = this.formatTransposedChord(this.getKeySignature(), transposeSemitones);
+    const time = this.getTimeSignature();
+
+    let pro = `{title: ${title}}\n`;
+    if (meta.composer) pro += `{composer: ${meta.composer}}\n`;
+    pro += `{key: ${key}}\n`;
+    pro += `{time: ${time.beats}/${time.beatType}}\n\n`;
+    pro += this.generateHopAmChuanText(transposeSemitones, 'inline');
+    return pro;
+  }
 }
 

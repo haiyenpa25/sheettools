@@ -216,10 +216,11 @@
         <!-- Export button -->
         <button
           @click="$emit('open-export')"
-          class="bg-primary text-on-primary px-3 py-1.5 rounded text-xs font-semibold hover:bg-primary-container transition-colors flex items-center gap-1 shadow-xs"
+          class="bg-primary text-on-primary px-3 py-1.5 rounded-lg text-xs font-bold hover:brightness-110 active:scale-98 transition-all flex items-center gap-1.5 shadow-sm"
+          title="Xuất bản 3 Phiên bản: Bản Đầy Đủ, Bản Không Lời và Bản Hợp Âm Chuẩn"
         >
-          <span class="material-symbols-outlined text-sm">download</span>
-          <span>Xuất XML</span>
+          <span class="material-symbols-outlined text-sm">ios_share</span>
+          <span>Xuất Bản (3 Version)</span>
         </button>
       </div>
     </div>
