@@ -42,6 +42,28 @@
           </button>
         </div>
 
+        <!-- 🎼 Score Clean Mode Toggle (Bản Nhạc Sạch / Kèm Lời Hát) -->
+        <div class="flex items-center bg-surface-container-low border border-border-subtle rounded-lg p-0.5 text-xs">
+          <button
+            @click="setScoreViewMode('clean')"
+            class="px-2.5 py-1 rounded-md font-bold transition-all flex items-center gap-1"
+            :class="scoreViewMode === 'clean' ? 'bg-primary text-on-primary shadow-xs' : 'text-secondary hover:text-on-surface'"
+            title="Hiển thị nốt nhạc & hợp âm sạch sẽ 100%, không bị rối mắt bởi lời lỗi"
+          >
+            <span class="material-symbols-outlined text-xs">music_note</span>
+            <span>Bản Nhạc Sạch (Nốt)</span>
+          </button>
+          <button
+            @click="setScoreViewMode('lyrics')"
+            class="px-2.5 py-1 rounded-md font-medium transition-all flex items-center gap-1"
+            :class="scoreViewMode === 'lyrics' ? 'bg-surface-container-lowest font-bold text-primary shadow-xs' : 'text-secondary hover:text-on-surface'"
+            title="Hiển thị nốt nhạc kèm lời bài hát"
+          >
+            <span class="material-symbols-outlined text-xs">lyrics</span>
+            <span>Kèm Lời Hát</span>
+          </button>
+        </div>
+
         <!-- Structure Wizard & Undo / Redo Buttons -->
         <div class="flex items-center gap-1">
           <button
@@ -1578,6 +1600,14 @@ function onImportLocalXml(e: Event) {
   reader.readAsText(file);
 }
 
+// Score Display Mode: 'clean' (Bản Nhạc Sạch - Nốt & Hợp Âm) | 'lyrics' (Kèm Lời Hát)
+const scoreViewMode = ref<'clean' | 'lyrics'>('clean');
+
+function setScoreViewMode(mode: 'clean' | 'lyrics') {
+  scoreViewMode.value = mode;
+  reRenderScore();
+}
+
 // Re-render OSMD with debounce
 const isSaving = ref(false);
 let renderDebounceTimer: any = null;
@@ -1588,10 +1618,14 @@ async function reRenderScore() {
   emit('update:xmlContent', newXml);
   updateUndoRedoState();
 
+  const xmlToRender = scoreViewMode.value === 'clean'
+    ? xmlEngine.getInstrumentalXml()
+    : newXml;
+
   clearTimeout(renderDebounceTimer);
   renderDebounceTimer = setTimeout(async () => {
     try {
-      await osmd?.load(newXml);
+      await osmd?.load(xmlToRender);
       osmd?.render();
       setTimeout(attachDirectScoreClickListeners, 150);
       isSaving.value = false;
@@ -1641,8 +1675,12 @@ async function initXml(xmlString: string) {
     });
   }
 
+  const xmlToRender = scoreViewMode.value === 'clean'
+    ? xmlEngine.getInstrumentalXml()
+    : xmlString;
+
   osmd.zoom = zoomLevel.value;
-  await osmd.load(xmlString);
+  await osmd.load(xmlToRender);
   osmd.render();
 
   setTimeout(attachDirectScoreClickListeners, 200);
