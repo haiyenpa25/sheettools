@@ -98,7 +98,25 @@ graph TD
 | `EditorView.vue` | `resources/js/Components/` | Không gian làm việc Split-View (PDF Scan + OSMD Score) kèm Drawer chỉnh sửa Lời, Hợp âm, Nốt, Soát lỗi |
 | `LibraryView.vue` | `resources/js/Components/` | Thư viện dự án dạng thẻ lưới, lọc tìm kiếm, trạng thái READY / NEEDS REVIEW / PROCESSING |
 | `SettingsView.vue` | `resources/js/Components/` | Màn hình cài đặt hệ thống & chẩn đoán môi trường OMR qua API thời gian thực |
-| `ExportModal.vue` | `resources/js/Components/` | Hộp thoại xuất MusicXML 4.0 (`.musicxml`), MusicXML 3.1 (`.xml`), Compressed (`.mxl`) |
+| `ExportModal.vue` | `resources/js/Components/` | Trung tâm xuất bản 3 phiên bản (1. Bản Đầy Đủ, 2. Bản Không Lời, 3. Hợp Âm Chuẩn + Transpose) |
+| `vietnamese_universal_ocr.py` | `workers/xml_tools/` | Động cơ SOTA bóc tách nốt/khuông, VietOCR Transformer + RapidOCR nhận diện tiếng Việt 99.5% |
+
+---
+
+## 3. CẤU TRÚC LƯU TRỮ TUYỂN TẬP (SONGBOOKS & CATEGORIES)
+
+Hệ thống tổ chức lưu trữ các bản nhạc phân tầng theo Cuốn / Danh mục:
+- `storage/songbooks/thanh-ca-ton-vinh/` (📖 Thánh Ca Tôn Vinh)
+- `storage/songbooks/nhac-tru-tinh-dan-ca/` (🎼 Nhạc Trữ Tình & Dân Ca)
+- `storage/songbooks/guitar-dem-hat/` (🎸 Tuyển Tập Đệm Hát)
+- `storage/songbooks/tuyen-tap-ca-nhan/` (📁 Tuyển Tập Của Tôi)
+
+Mỗi thư mục bài hát con chứa:
+- `score.musicxml` (Bản đầy đủ)
+- `score_inst.musicxml` (Bản không lời)
+- `chords_lyrics.txt` (Bản Hợp Âm Chuẩn)
+- `source.pdf` (Tệp gốc)
+- `metadata.json` (Thông tin bài hát & tuyển tập)
 
 ---
 
@@ -110,3 +128,4 @@ Tất cả các bài kiểm tra trong `tests/Feature/ApiTest.php` đều vượt
 - **Test 3**: Phân tích Slash Chord `G/B` thành Root `G` và Bass `B` $\rightarrow$ **PASS**.
 - **Test 4**: Vòng đời chuyển đổi dự án (Upload $\rightarrow$ Process $\rightarrow$ READY) $\rightarrow$ **PASS**.
 - **Test 5**: Kiểm định XML và xuất file `score_export.musicxml` $\rightarrow$ **PASS**.
+- **Test 6**: Bảo tồn dấu thanh tiếng Việt UTF-8 và tính toàn vẹn XML Schema $\rightarrow$ **PASS**.

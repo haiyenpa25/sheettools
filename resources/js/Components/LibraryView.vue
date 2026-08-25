@@ -5,12 +5,12 @@
       <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h2 class="font-headline-md text-2xl font-bold text-primary flex items-center gap-2">
-            <span>Thư viện dự án</span>
+            <span>Thư Viện Tuyển Tập & Bản Nhạc</span>
             <span class="text-xs bg-primary/10 text-primary border border-primary/20 px-2.5 py-0.5 rounded-full font-mono-label font-bold">
               {{ projectStore.projects.length }} bản nhạc
             </span>
           </h2>
-          <p class="font-label-sm text-sm text-secondary mt-0.5">Quản lý, thêm, sửa, xóa và mở các bản nhạc đã chuyển đổi</p>
+          <p class="font-label-sm text-sm text-secondary mt-0.5">Quản lý, phân loại theo Cuốn Tuyển Tập, sửa và xuất bản các bài hát</p>
         </div>
 
         <div class="flex items-center gap-3 w-full sm:w-auto">
@@ -20,28 +20,43 @@
             <input
               v-model="searchTerm"
               type="text"
-              placeholder="Tìm kiếm theo tên bài, tác giả..."
-              class="w-full pl-9 pr-4 py-2 bg-surface-container-low border border-border-subtle rounded-lg text-sm text-on-surface focus:outline-none focus:border-primary transition-colors"
+              placeholder="Tìm theo tên bài, tác giả, số bài..."
+              class="w-full pl-9 pr-4 py-2 bg-surface-container-low border border-border-subtle rounded-xl text-sm text-on-surface focus:outline-none focus:border-primary transition-colors"
             />
           </div>
 
           <!-- + Tạo mới Button -->
-          <label class="bg-primary text-on-primary px-4 py-2 rounded-lg font-label-sm text-sm font-semibold hover:bg-primary-container transition-colors flex items-center gap-1.5 shadow-sm whitespace-nowrap cursor-pointer">
+          <label class="bg-primary text-on-primary px-4 py-2 rounded-xl font-label-sm text-sm font-semibold hover:bg-primary-container transition-colors flex items-center gap-1.5 shadow-sm whitespace-nowrap cursor-pointer">
             <span class="material-symbols-outlined text-lg">add</span>
-            <span>+ Tạo mới</span>
+            <span>+ Tải Lên Mới</span>
             <input type="file" accept=".pdf,.png,.jpg,.jpeg,.xml,.musicxml" class="hidden" @change="onQuickUploadNewFile" />
           </label>
         </div>
       </div>
 
+      <!-- ════════ SONGBOOKS & CATEGORIES TABS ════════ -->
+      <div class="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none border-b border-border-subtle">
+        <button
+          v-for="cat in projectStore.categories"
+          :key="cat.slug"
+          @click="projectStore.activeCategorySlug.value = cat.slug"
+          class="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap"
+          :class="projectStore.activeCategorySlug.value === cat.slug ? 'bg-primary text-on-primary shadow-sm' : 'bg-surface-container-low text-secondary hover:text-on-surface hover:bg-surface-container'"
+        >
+          <span class="material-symbols-outlined text-sm">{{ cat.icon }}</span>
+          <span>{{ cat.name }}</span>
+          <span class="text-[10px] opacity-80 font-mono">({{ getCategoryCount(cat.slug) }})</span>
+        </button>
+      </div>
+
       <!-- ════════ FILTER STATUS PILLS ════════ -->
-      <div class="flex items-center gap-2 border-b border-border-subtle pb-3">
+      <div class="flex items-center gap-2">
         <button
           @click="statusFilter = 'ALL'"
           class="px-3 py-1 rounded-full text-xs font-semibold transition-colors"
-          :class="statusFilter === 'ALL' ? 'bg-primary text-on-primary' : 'bg-surface-container-low text-secondary hover:text-on-surface'"
+          :class="statusFilter === 'ALL' ? 'bg-surface-container-high text-on-surface font-bold' : 'bg-surface-container-low text-secondary hover:text-on-surface'"
         >
-          Tất cả ({{ projectStore.projects.length }})
+          Tất cả trạng thái
         </button>
         <button
           @click="statusFilter = 'READY'"
@@ -62,11 +77,11 @@
       </div>
 
       <!-- ════════ EMPTY STATE ════════ -->
-      <div v-if="filteredProjects.length === 0" class="text-center py-16 bg-surface-container-lowest rounded-xl border border-border-subtle">
-        <span class="material-symbols-outlined text-5xl text-secondary mb-3">library_music</span>
-        <h3 class="font-headline-sm text-base font-bold text-on-surface mb-1">Không tìm thấy bản nhạc nào</h3>
-        <p class="text-xs text-secondary mb-4">Hãy tải lên một bản nhạc PDF hoặc hình ảnh mới để bắt đầu.</p>
-        <label class="bg-primary text-on-primary px-4 py-2 rounded font-label-sm text-xs font-semibold hover:bg-primary-container transition-colors inline-flex items-center gap-1.5 cursor-pointer">
+      <div v-if="filteredProjects.length === 0" class="text-center py-16 bg-surface-container-lowest rounded-2xl border border-border-subtle">
+        <span class="material-symbols-outlined text-5xl text-secondary mb-3">auto_stories</span>
+        <h3 class="font-headline-sm text-base font-bold text-on-surface mb-1">Chưa có bài hát trong tuyển tập này</h3>
+        <p class="text-xs text-secondary mb-4">Hãy tải lên một bản nhạc PDF hoặc hình ảnh mới để lưu vào cuốn tuyển tập.</p>
+        <label class="bg-primary text-on-primary px-4 py-2 rounded-xl font-label-sm text-xs font-semibold hover:bg-primary-container transition-colors inline-flex items-center gap-1.5 cursor-pointer">
           <span class="material-symbols-outlined text-base">upload_file</span>
           <span>Tải lên bản nhạc mới</span>
           <input type="file" accept=".pdf,.png,.jpg,.jpeg,.xml,.musicxml" class="hidden" @change="onQuickUploadNewFile" />
@@ -78,11 +93,11 @@
         <div
           v-for="project in filteredProjects"
           :key="project.id"
-          class="bg-surface-container-lowest border border-border-subtle rounded-xl overflow-hidden flex flex-col hover:shadow-md hover:border-primary/50 transition-all group relative cursor-pointer"
+          class="bg-surface-container-lowest border border-border-subtle rounded-2xl overflow-hidden flex flex-col hover:shadow-lg hover:border-primary/50 transition-all group relative cursor-pointer"
           @click="openProject(project)"
         >
           <!-- Card Thumbnail with dynamic preview -->
-          <div class="h-40 bg-surface-container-low border-b border-border-subtle relative overflow-hidden flex items-center justify-center">
+          <div class="h-44 bg-surface-container-low border-b border-border-subtle relative overflow-hidden flex items-center justify-center">
             <!-- If user has actual image preview -->
             <img
               v-if="project.sourceImageUrl"
@@ -98,7 +113,16 @@
               </div>
             </div>
 
-            <!-- Status Badge -->
+            <!-- Category Badge (Top-Left) -->
+            <div
+              v-if="project.categoryName"
+              class="absolute top-2.5 left-2.5 bg-slate-900/80 backdrop-blur-xs text-white px-2.5 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 shadow-sm"
+            >
+              <span class="material-symbols-outlined text-xs text-primary">bookmark</span>
+              <span>{{ project.categoryName }} {{ project.songNumber ? `#${project.songNumber}` : '' }}</span>
+            </div>
+
+            <!-- Status Badge (Top-Right) -->
             <div
               v-if="project.status === 'READY'"
               class="absolute top-2.5 right-2.5 bg-success text-on-primary px-2.5 py-1 rounded-md font-mono-label text-[10px] font-bold flex items-center gap-1 shadow-sm"
@@ -119,53 +143,57 @@
             </div>
           </div>
 
-          <!-- Card Details -->
-          <div class="p-4 flex-1 flex flex-col justify-between">
+          <!-- Card Content -->
+          <div class="p-4 flex-1 flex flex-col justify-between space-y-3">
             <div>
-              <div class="flex items-start justify-between gap-2 mb-1">
-                <h3 class="font-headline-sm text-sm font-bold text-on-surface truncate group-hover:text-primary transition-colors flex-1" :title="project.title">
-                  {{ project.title }}
-                </h3>
-                <button
-                  @click.stop="openRenameModal(project)"
-                  class="text-secondary hover:text-primary p-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity"
-                  title="Đổi tên bản nhạc"
-                >
-                  <span class="material-symbols-outlined text-sm">edit</span>
-                </button>
-              </div>
-
-              <p class="font-label-sm text-xs text-secondary mb-3 flex items-center gap-2">
-                <span>{{ project.composer || 'Felice de Giardini' }}</span>
-                <span>•</span>
-                <span>{{ project.date }}</span>
+              <h3 class="font-headline-sm text-sm font-bold text-on-surface truncate group-hover:text-primary transition-colors">
+                {{ project.title }}
+              </h3>
+              <p class="font-label-sm text-xs text-secondary truncate mt-0.5">
+                {{ project.composer || 'Chưa rõ tác giả' }}
               </p>
             </div>
 
-            <!-- Card Bottom Actions -->
-            <div class="flex justify-between items-center border-t border-border-subtle pt-3 mt-2">
-              <button
-                @click.stop="openProject(project)"
-                class="text-primary hover:text-primary-container font-label-sm text-xs font-bold transition-colors uppercase tracking-wider flex items-center gap-1"
+            <!-- Meta details row -->
+            <div class="flex items-center justify-between text-[11px] text-secondary border-t border-border-subtle pt-2">
+              <div class="flex items-center gap-2 font-mono">
+                <span>{{ project.keySig || 'C Major' }}</span>
+                <span>•</span>
+                <span>{{ project.timeSig || '4/4' }}</span>
+              </div>
+              <div class="flex items-center gap-1">
+                <span class="material-symbols-outlined text-xs">lyrics</span>
+                <span>{{ project.verses }} Verse</span>
+              </div>
+            </div>
+
+            <!-- Card Actions -->
+            <div class="flex items-center justify-between pt-1" @click.stop>
+              <!-- Chuyển Category Selector -->
+              <select
+                :value="project.categorySlug || 'thanh-ca-ton-vinh'"
+                @change="onCategoryChange(project.id, ($event.target as HTMLSelectElement).value)"
+                class="text-[10px] bg-surface-container-low border border-border-subtle rounded-lg px-2 py-1 text-secondary font-medium hover:border-primary transition-colors"
+                title="Đổi Tuyển tập / Danh mục"
               >
-                {{ project.status === 'NEEDS_REVIEW' ? 'REVIEW' : 'OPEN' }} →
-              </button>
+                <option value="thanh-ca-ton-vinh">📖 Thánh Ca</option>
+                <option value="nhac-tru-tinh-dan-ca">🎼 Nhạc Trữ Tình</option>
+                <option value="guitar-dem-hat">🎸 Đệm Hát</option>
+                <option value="tuyen-tap-ca-nhan">📁 Tuyển Tập Riêng</option>
+              </select>
 
               <div class="flex items-center gap-1">
-                <!-- Quick Export MusicXML -->
                 <button
-                  @click.stop="quickDownloadXml(project)"
-                  class="p-1.5 text-secondary hover:text-primary hover:bg-surface-container-low rounded-md transition-colors"
-                  title="Tải về file MusicXML"
+                  @click.stop="openProject(project)"
+                  class="p-1.5 text-secondary hover:text-primary hover:bg-surface-container-low rounded-lg transition-colors"
+                  title="Mở chỉnh sửa bản nhạc"
                 >
-                  <span class="material-symbols-outlined text-base">download</span>
+                  <span class="material-symbols-outlined text-base">edit</span>
                 </button>
-
-                <!-- Delete Project Button -->
                 <button
-                  @click.stop="confirmDelete(project)"
-                  class="p-1.5 text-secondary hover:text-error hover:bg-error/10 rounded-md transition-colors"
-                  title="Xóa bản nhạc này"
+                  @click.stop="confirmDeleteProject(project.id, project.title)"
+                  class="p-1.5 text-secondary hover:text-error hover:bg-surface-container-low rounded-lg transition-colors"
+                  title="Xóa vĩnh viễn"
                 >
                   <span class="material-symbols-outlined text-base">delete</span>
                 </button>
@@ -175,77 +203,51 @@
         </div>
       </div>
     </div>
-
-    <!-- ════════ RENAME PROJECT MODAL ════════ -->
-    <Teleport to="body">
-      <div v-if="showRenameModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4" @click.self="showRenameModal = false">
-        <div class="bg-surface-container-lowest border border-border-subtle rounded-xl max-w-md w-full p-6 shadow-xl space-y-4">
-          <div class="flex justify-between items-center pb-2 border-b border-border-subtle">
-            <h3 class="font-headline-sm text-base font-bold text-on-surface">Đổi Tên Bản Nhạc</h3>
-            <button @click="showRenameModal = false" class="p-1 text-secondary hover:text-on-surface">✕</button>
-          </div>
-
-          <div class="space-y-3 text-xs">
-            <div>
-              <label class="block font-semibold text-on-surface mb-1">Tiêu đề bài hát</label>
-              <input
-                v-model="editProjectTitle"
-                type="text"
-                class="w-full p-2.5 border border-border-subtle rounded-lg bg-surface-container-lowest text-sm focus:border-primary outline-none"
-              />
-            </div>
-            <div>
-              <label class="block font-semibold text-on-surface mb-1">Nhạc sĩ / Tác giả</label>
-              <input
-                v-model="editProjectComposer"
-                type="text"
-                class="w-full p-2.5 border border-border-subtle rounded-lg bg-surface-container-lowest text-sm focus:border-primary outline-none"
-              />
-            </div>
-          </div>
-
-          <div class="flex justify-end gap-2 pt-2 border-t border-border-subtle">
-            <button @click="showRenameModal = false" class="px-3.5 py-1.5 border border-border-subtle text-secondary rounded-lg text-xs font-semibold">Hủy</button>
-            <button @click="saveRename" class="px-4 py-1.5 bg-primary text-on-primary rounded-lg text-xs font-semibold hover:bg-primary-container">Lưu thay đổi</button>
-          </div>
-        </div>
-      </div>
-    </Teleport>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import { projectStore, type ProjectItem } from '../Services/ProjectStore';
+import { projectStore, ProjectItem } from '../Services/ProjectStore';
 
 const emit = defineEmits<{
   (e: 'open-project', project: ProjectItem): void;
-  (e: 'start-conversion', file: File, config: any): void;
+  (e: 'start-conversion', file: File): void;
 }>();
 
-const searchTerm = ref('');
+const searchTerm = ref<string>('');
 const statusFilter = ref<'ALL' | 'READY' | 'NEEDS_REVIEW'>('ALL');
 
-const showRenameModal = ref(false);
-const editingProjectId = ref('');
-const editProjectTitle = ref('');
-const editProjectComposer = ref('');
+function getCategoryCount(slug: string): number {
+  if (slug === 'all') return projectStore.projects.length;
+  return projectStore.projects.filter(p => (p.categorySlug || 'thanh-ca-ton-vinh') === slug).length;
+}
 
 const filteredProjects = computed(() => {
-  let list = projectStore.projects;
+  return projectStore.projects.filter(p => {
+    // 1. Lọc theo Category / Songbook Tab
+    const currentCat = projectStore.activeCategorySlug.value;
+    if (currentCat !== 'all') {
+      const pCat = p.categorySlug || 'thanh-ca-ton-vinh';
+      if (pCat !== currentCat) return false;
+    }
 
-  if (statusFilter.value !== 'ALL') {
-    list = list.filter(p => p.status === statusFilter.value);
-  }
+    // 2. Lọc theo Status
+    if (statusFilter.value !== 'ALL' && p.status !== statusFilter.value) {
+      return false;
+    }
 
-  if (searchTerm.value.trim()) {
-    const q = searchTerm.value.toLowerCase();
-    list = list.filter(
-      p => p.title.toLowerCase().includes(q) || (p.composer && p.composer.toLowerCase().includes(q))
-    );
-  }
+    // 3. Lọc theo Search Term
+    if (searchTerm.value.trim() !== '') {
+      const term = searchTerm.value.toLowerCase().trim();
+      const matchTitle = p.title.toLowerCase().includes(term);
+      const matchComposer = (p.composer || '').toLowerCase().includes(term);
+      const matchNumber = (p.songNumber || '').includes(term);
+      return matchTitle || matchComposer || matchNumber;
+    }
 
-  return list;
+    return true;
+  });
 });
 
 function openProject(project: ProjectItem) {
@@ -253,52 +255,20 @@ function openProject(project: ProjectItem) {
   emit('open-project', project);
 }
 
-function openRenameModal(project: ProjectItem) {
-  editingProjectId.value = project.id;
-  editProjectTitle.value = project.title;
-  editProjectComposer.value = project.composer || '';
-  showRenameModal.value = true;
+function onCategoryChange(projectId: string, newSlug: string) {
+  projectStore.updateProjectCategory(projectId, newSlug);
 }
 
-function saveRename() {
-  if (editingProjectId.value && editProjectTitle.value.trim()) {
-    projectStore.updateProject(editingProjectId.value, {
-      title: editProjectTitle.value.trim(),
-      composer: editProjectComposer.value.trim(),
-    });
-  }
-  showRenameModal.value = false;
-}
-
-function confirmDelete(project: ProjectItem) {
-  if (confirm(`Bạn có chắc chắn muốn xóa bản nhạc "${project.title}" khỏi thư viện?`)) {
-    projectStore.deleteProject(project.id);
+async function confirmDeleteProject(id: string, title: string) {
+  if (confirm(`Bạn có chắc chắn muốn xóa bản nhạc "${title}" không? Hành động này không thể hoàn tác.`)) {
+    await projectStore.deleteProject(id);
   }
 }
 
-function quickDownloadXml(project: ProjectItem) {
-  const xml = project.xmlContent || '';
-  const blob = new Blob([xml], { type: 'application/vnd.recordare.musicxml+xml' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${project.title}.musicxml`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-
-function onQuickUploadNewFile(e: Event) {
-  const file = (e.target as HTMLInputElement).files?.[0];
-  if (!file) return;
-
-  emit('start-conversion', file, {
-    omrEngine: 'audiveris',
-    langVietnamese: true,
-    langEnglish: true,
-    recognizeLyrics: true,
-    recognizeChords: true,
-  });
+function onQuickUploadNewFile(event: Event) {
+  const input = event.target as HTMLInputElement;
+  if (input.files && input.files[0]) {
+    emit('start-conversion', input.files[0]);
+  }
 }
 </script>

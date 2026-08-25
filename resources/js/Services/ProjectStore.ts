@@ -1,6 +1,13 @@
 import { reactive, ref } from 'vue';
 import { OmrTranscriptionService } from './OmrTranscriptionService';
 
+export interface SongbookCategory {
+  slug: string;
+  name: string;
+  icon: string;
+  description: string;
+}
+
 export interface ProjectItem {
   id: string;
   uuid?: string;
@@ -15,9 +22,20 @@ export interface ProjectItem {
   sourceImageUrl?: string;
   sourcePdfUrl?: string;
   xmlContent?: string;
+  categorySlug?: string;
+  categoryName?: string;
+  songNumber?: string;
 }
 
-const STORAGE_KEY = 'sheet_converter_projects_v12';
+export const defaultCategories: SongbookCategory[] = [
+  { slug: 'all', name: 'Tất Cả Tuyển Tập', icon: 'auto_stories', description: 'Toàn bộ bài hát trong thư viện' },
+  { slug: 'thanh-ca-ton-vinh', name: 'Thánh Ca Tôn Vinh', icon: 'menu_book', description: 'Tuyển tập thánh ca thờ phượng' },
+  { slug: 'nhac-tru-tinh-dan-ca', name: 'Nhạc Trữ Tình & Dân Ca', icon: 'music_note', description: 'Tuyển tập bài hát quê hương & trữ tình' },
+  { slug: 'guitar-dem-hat', name: 'Tuyển Tập Đệm Hát', icon: 'queue_music', description: 'Bài hát kèm hợp âm guitar & acoustic' },
+  { slug: 'tuyen-tap-ca-nhan', name: 'Tuyển Tập Của Tôi', icon: 'folder', description: 'Các bài hát riêng của bạn' },
+];
+
+const STORAGE_KEY = 'sheet_converter_projects_v14';
 
 // Danh sách các bản nhạc chuẩn mẫu (Chỉ nạp lần đầu tiên khi chưa có dữ liệu)
 const initialProjects: ProjectItem[] = [
@@ -34,6 +52,9 @@ const initialProjects: ProjectItem[] = [
     sourceImageUrl: '/golden.png',
     sourcePdfUrl: '/samples/002_tu_coi_long/source.pdf',
     xmlContent: OmrTranscriptionService.generateTuCoiLongSauTham(),
+    categorySlug: 'thanh-ca-ton-vinh',
+    categoryName: 'Thánh Ca Tôn Vinh',
+    songNumber: '001',
   },
   {
     id: 'p_002',
@@ -47,6 +68,9 @@ const initialProjects: ProjectItem[] = [
     sourceFilename: '2.pdf',
     sourcePdfUrl: '/samples/003_tron_ca_tam_long/source.pdf',
     xmlContent: OmrTranscriptionService.generateTronCaTamLong(),
+    categorySlug: 'thanh-ca-ton-vinh',
+    categoryName: 'Thánh Ca Tôn Vinh',
+    songNumber: '002',
   },
   {
     id: 'p_003',
@@ -60,12 +84,17 @@ const initialProjects: ProjectItem[] = [
     sourceFilename: '001 Hỡi Thánh Vương, Kíp Ngự Lai.pdf',
     sourcePdfUrl: '/samples/001_hoi_thanh_vuong/score.xml',
     xmlContent: OmrTranscriptionService.generateTonVinhChanThan(),
+    categorySlug: 'thanh-ca-ton-vinh',
+    categoryName: 'Thánh Ca Tôn Vinh',
+    songNumber: '003',
   },
 ];
 
 class ProjectStore {
   public projects = reactive<ProjectItem[]>([]);
   public activeProjectId = ref<string>('p_001');
+  public activeCategorySlug = ref<string>('all');
+  public categories = reactive<SongbookCategory[]>([...defaultCategories]);
 
   constructor() {
     this.loadFromStorage();
@@ -215,14 +244,19 @@ class ProjectStore {
       if (uuid) {
         // Đồng bộ siêu dữ liệu (Metadata: Title, Status)
         if (updates.title || updates.composer || updates.status) {
-          fetch(`/api/conversions/${uuid}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              title: updates.title || proj.title,
-              status: updates.status || proj.status,
-            }),
-          }).catch(err => console.warn('Could not sync metadata to backend:', err));
+          try {
+            await fetch(`/api/conversions/${uuid}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                title: proj.title,
+                composer: proj.composer,
+                status: proj.status,
+              }),
+            });
+          } catch (err) {
+            console.warn('Could not sync metadata update to backend:', err);
+          }
         }
 
         // Đồng bộ MusicXML vào current.musicxml trên ổ đĩa backend
@@ -239,6 +273,22 @@ class ProjectStore {
 
   public getProject(id: string): ProjectItem | undefined {
     return this.projects.find(p => p.id === id);
+  }
+
+  public updateProjectCategory(id: string, categorySlug: string, songNumber?: string): void {
+    const proj = this.projects.find(p => p.id === id);
+    if (proj) {
+      const cat = this.categories.find(c => c.slug === categorySlug);
+      proj.categorySlug = categorySlug;
+      proj.categoryName = cat?.name || categorySlug;
+      if (songNumber) proj.songNumber = songNumber;
+      this.saveToStorage();
+    }
+  }
+
+  public getProjectsByCategory(categorySlug: string): ProjectItem[] {
+    if (categorySlug === 'all') return this.projects;
+    return this.projects.filter(p => p.categorySlug === categorySlug);
   }
 }
 

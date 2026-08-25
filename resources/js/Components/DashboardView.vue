@@ -48,15 +48,29 @@
                 <div class="w-16 h-16 rounded-full bg-success/15 text-success flex items-center justify-center">
                   <span class="material-symbols-outlined text-3xl">description</span>
                 </div>
-                <div class="text-center">
+                <div class="text-center w-full">
                   <p class="font-body-lg text-base font-semibold text-on-surface truncate">{{ selectedFile.name }}</p>
                   <p class="font-label-sm text-xs text-secondary mt-0.5">{{ formatFileSize(selectedFile.size) }} • Sẵn sàng chuyển đổi</p>
+
+                  <!-- Songbook Category Selection -->
+                  <div class="mt-3 flex items-center justify-center gap-2" @click.stop>
+                    <span class="text-xs font-semibold text-secondary">Lưu vào Tuyển tập:</span>
+                    <select
+                      v-model="targetCategorySlug"
+                      class="text-xs bg-surface-container-high border border-border-subtle rounded-lg px-3 py-1.5 text-on-surface font-semibold focus:outline-none focus:border-primary"
+                    >
+                      <option value="thanh-ca-ton-vinh">📖 Thánh Ca Tôn Vinh</option>
+                      <option value="nhac-tru-tinh-dan-ca">🎼 Nhạc Trữ Tình & Dân Ca</option>
+                      <option value="guitar-dem-hat">🎸 Tuyển Tập Đệm Hát</option>
+                      <option value="tuyen-tap-ca-nhan">📁 Tuyển Tập Của Tôi</option>
+                    </select>
+                  </div>
                 </div>
 
                 <div class="flex items-center gap-3 mt-4" @click.stop>
                   <button
                     @click="onStartConvert"
-                    class="bg-primary text-on-primary px-6 py-2.5 rounded-lg font-label-sm text-sm font-semibold hover:bg-primary-container transition-all flex items-center gap-2 shadow-sm"
+                    class="bg-primary text-on-primary px-6 py-2.5 rounded-xl font-label-sm text-sm font-semibold hover:bg-primary-container transition-all flex items-center gap-2 shadow-sm"
                   >
                     <span class="material-symbols-outlined text-lg">play_arrow</span>
                     Bắt đầu chuyển đổi OMR
@@ -231,6 +245,7 @@ const fileInputRef = ref<HTMLInputElement | null>(null);
 const isDragging = ref(false);
 const selectedFile = ref<File | null>(null);
 const savedNotice = ref(false);
+const targetCategorySlug = ref<string>('thanh-ca-ton-vinh');
 
 const config = reactive({
   omrEngine: 'audiveris',
@@ -265,7 +280,7 @@ function clearFile() {
 
 function onStartConvert() {
   if (!selectedFile.value) return;
-  emit('start-conversion', selectedFile.value, { ...config });
+  emit('start-conversion', selectedFile.value, { ...config, categorySlug: targetCategorySlug.value });
 }
 
 function openRecentProject(project: ProjectItem) {

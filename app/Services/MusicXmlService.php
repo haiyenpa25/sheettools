@@ -158,4 +158,38 @@ class MusicXmlService
             'tempo' => 100,
         ];
     }
+
+    /**
+     * Chuẩn hóa và làm sạch toàn bộ cấu trúc MusicXML (Header, Indentation, Encoding)
+     */
+    public function cleanAndNormalizeMusicXml(string $xmlContent): string
+    {
+        $dom = new \DOMDocument('1.0', 'UTF-8');
+        $dom->preserveWhiteSpace = false;
+        $dom->formatOutput = true;
+
+        if (!@$dom->loadXML($xmlContent)) {
+            return $xmlContent;
+        }
+
+        $root = $dom->documentElement;
+        if ($root && $root->nodeName === 'score-partwise') {
+            if (!$root->hasAttribute('version')) {
+                $root->setAttribute('version', '4.0');
+            }
+
+            // Đảm bảo có thẻ <work> và <movement-title>
+            $titleNode = $root->getElementsByTagName('movement-title')->item(0);
+            $workNode = $root->getElementsByTagName('work')->item(0);
+
+            if ($titleNode && !$workNode) {
+                $newWork = $dom->createElement('work');
+                $newWorkTitle = $dom->createElement('work-title', htmlspecialchars($titleNode->textContent));
+                $newWork->appendChild($newWorkTitle);
+                $root->insertBefore($newWork, $root->firstChild);
+            }
+        }
+
+        return $dom->saveXML();
+    }
 }
