@@ -62,20 +62,44 @@ if ($uri === '/api/conversions') {
     }
 
     if ($method === 'POST') {
-        if (!isset($_FILES['file'])) {
-            jsonResponse(['error' => 'NO_FILE_UPLOADED', 'message' => 'No file uploaded in form field "file"'], 400);
-        }
-
-        $file = $_FILES['file'];
         $language = $_POST['language'] ?? 'vie+eng';
 
-        $project = $conversionService->createProject($file['name'], $file['tmp_name'], ['language' => $language]);
-        // Process project via truthful OMR pipeline
-        $conversionService->processProject($project->uuid);
+        // 1. Tạo từ tệp tải lên (PDF, PNG, JPG, XML)
+        if (isset($_FILES['file'])) {
+            $file = $_FILES['file'];
+            $project = $conversionService->createProject($file['name'], $file['tmp_name'], ['language' => $language]);
+            $conversionService->processProject($project->uuid);
+            $fresh = $repo->findByUuid($project->uuid);
+            jsonResponse(['data' => $fresh ? $fresh->toArray() : $project->toArray()], 201);
+        }
 
-        // Fetch refreshed status after processing
-        $fresh = $repo->findByUuid($project->uuid);
-        jsonResponse(['data' => $fresh ? $fresh->toArray() : $project->toArray()], 201);
+        // 2. Tạo trực tiếp từ JSON payload (VD: nhập XML, cấu trúc mới từ Wizard)
+        $rawInput = file_get_contents('php://input');
+        if (!empty($rawInput) && str_starts_with(trim($rawInput), '{')) {
+            $json = json_decode($rawInput, true);
+            $title = $json['title'] ?? 'Bản nhạc mới';
+            $xmlContent = $json['xmlContent'] ?? $json['xml'] ?? '';
+            $filename = $json['filename'] ?? ($title . '.musicxml');
+
+            $tempFile = tempnam(sys_get_temp_dir(), 'proj_init_');
+            file_put_contents($tempFile, $xmlContent);
+
+            $project = $conversionService->createProject($filename, $tempFile, ['language' => $language]);
+            if (!empty($xmlContent) && strlen($xmlContent) > 50) {
+                $rawXmlPath = $storageService->getRawMusicXmlPath($project->uuid);
+                $curXmlPath = $storageService->getCurrentMusicXmlPath($project->uuid);
+                file_put_contents($rawXmlPath, $xmlContent);
+                file_put_contents($curXmlPath, $xmlContent);
+                $project->status = 'READY';
+                $project->progress = 100;
+                $project->currentStep = 'ready';
+                $repo->save($project);
+            }
+            @unlink($tempFile);
+            jsonResponse(['data' => $project->toArray()], 201);
+        }
+
+        jsonResponse(['error' => 'NO_FILE_OR_DATA', 'message' => 'Vui lòng cung cấp tệp upload hoặc dữ liệu JSON.'], 400);
     }
 }
 

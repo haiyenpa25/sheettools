@@ -190,6 +190,28 @@ class ProjectStore {
     this.projects.unshift(newProj);
     this.activeProjectId.value = newProj.id;
     this.saveToStorage();
+
+    // Tự động tạo thư mục dự án và tệp MusicXML thật trên ổ đĩa backend
+    if (!uuid && xmlContent && xmlContent.length > 50) {
+      fetch('/api/conversions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: newProj.title,
+          filename: newProj.sourceFilename,
+          xmlContent: newProj.xmlContent,
+        }),
+      })
+        .then(r => r.json())
+        .then(res => {
+          if (res?.data?.uuid) {
+            newProj.uuid = res.data.uuid;
+            this.saveToStorage();
+          }
+        })
+        .catch(err => console.warn('Could not persist new project to backend:', err));
+    }
+
     return newProj;
   }
 
@@ -205,7 +227,7 @@ class ProjectStore {
       }
       this.saveToStorage();
 
-      // Gọi API xóa trên backend nếu có UUID
+      // Gọi API xóa vĩnh viễn trên ổ đĩa backend
       if (uuid) {
         fetch(`/api/conversions/${uuid}`, { method: 'DELETE' }).catch(err => {
           console.warn('Could not delete project from backend:', err);
@@ -222,14 +244,28 @@ class ProjectStore {
       Object.assign(proj, updates);
       this.saveToStorage();
 
-      // Đồng bộ MusicXML lên backend nếu có cập nhật nội dung XML
       const uuid = proj.uuid || (id.length > 20 ? id : undefined);
-      if (uuid && updates.xmlContent) {
-        fetch(`/api/conversions/${uuid}/musicxml`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/xml' },
-          body: updates.xmlContent,
-        }).catch(err => console.warn('Could not sync MusicXML to backend:', err));
+      if (uuid) {
+        // Đồng bộ siêu dữ liệu (Metadata: Title, Status)
+        if (updates.title || updates.composer || updates.status) {
+          fetch(`/api/conversions/${uuid}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              title: updates.title || proj.title,
+              status: updates.status || proj.status,
+            }),
+          }).catch(err => console.warn('Could not sync metadata to backend:', err));
+        }
+
+        // Đồng bộ MusicXML vào current.musicxml trên ổ đĩa backend
+        if (updates.xmlContent) {
+          fetch(`/api/conversions/${uuid}/musicxml`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/xml' },
+            body: updates.xmlContent,
+          }).catch(err => console.warn('Could not sync MusicXML to backend:', err));
+        }
       }
     }
   }
