@@ -255,53 +255,150 @@
         class="bg-surface-container-lowest flex flex-col overflow-hidden min-w-[260px]"
         :style="{ width: layoutMode === 'source' ? '100%' : leftPaneWidth + '%' }"
       >
-        <div class="h-8 bg-surface-container-low border-b border-border-subtle flex items-center px-3 justify-between shrink-0">
-          <span class="font-label-sm text-xs text-on-surface font-semibold uppercase tracking-wider">Source (Bản PDF / Ảnh Scan Gốc)</span>
+        <div class="h-9 bg-surface-container-low border-b border-border-subtle flex items-center px-3 justify-between shrink-0 gap-2 flex-wrap">
           <div class="flex items-center gap-2">
+            <span class="font-label-sm text-xs text-on-surface font-bold uppercase tracking-wider">Source Scan</span>
             <!-- 3-Zone Inspector Toggle -->
             <button
               @click="show3ZoneOverlay = !show3ZoneOverlay"
-              class="px-2 py-0.5 rounded text-[11px] font-bold flex items-center gap-1 transition-all"
+              class="px-2.5 py-1 rounded-md text-[11px] font-bold flex items-center gap-1 transition-all"
               :class="show3ZoneOverlay ? 'bg-primary text-on-primary shadow-xs' : 'bg-surface-container-high text-secondary hover:text-on-surface'"
-              title="Bật/Tắt hiển thị trực quan 3 Vùng Không Gian (Header, Nốt sạch, Lời hát)"
+              title="Bật/Tắt chế độ chỉnh sửa và tự vẽ lại 3 Vùng Không Gian (Header, Nốt, Lời)"
             >
-              <span class="material-symbols-outlined text-xs">layers</span>
-              <span>3-Zone</span>
+              <span class="material-symbols-outlined text-xs">draw</span>
+              <span>{{ show3ZoneOverlay ? 'Đang Vẽ 3-Zone' : 'Chỉnh Sửa 3-Zone' }}</span>
             </button>
-            <span class="text-[11px] text-secondary">Trang 1 / 1</span>
           </div>
+
+          <!-- 3-Zone Drawing Tools Sub-bar (When Active) -->
+          <div v-if="show3ZoneOverlay" class="flex items-center gap-1 text-xs">
+            <button
+              @click="activeDrawTool = 'select'"
+              class="px-2 py-0.5 rounded font-medium flex items-center gap-0.5 transition-colors"
+              :class="activeDrawTool === 'select' ? 'bg-surface-container-lowest text-primary font-bold shadow-xs' : 'text-secondary hover:text-on-surface'"
+              title="Chế độ chọn và kéo chỉnh sửa"
+            >
+              <span class="material-symbols-outlined text-xs">arrow_selector_tool</span>
+              <span class="hidden sm:inline">Chọn</span>
+            </button>
+
+            <button
+              @click="activeDrawTool = 'header'"
+              class="px-2 py-0.5 rounded font-semibold flex items-center gap-0.5 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 transition-colors"
+              :class="{ 'ring-2 ring-emerald-500 font-bold': activeDrawTool === 'header' }"
+              title="Vẽ vùng Tiêu đề & Tác giả"
+            >
+              <span class="material-symbols-outlined text-xs">title</span>
+              <span>+ Header</span>
+            </button>
+
+            <button
+              @click="activeDrawTool = 'notation'"
+              class="px-2 py-0.5 rounded font-semibold flex items-center gap-0.5 text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-300 transition-colors"
+              :class="{ 'ring-2 ring-blue-500 font-bold': activeDrawTool === 'notation' }"
+              title="Vẽ vùng Khuông nhạc & Nốt thuần khiết"
+            >
+              <span class="material-symbols-outlined text-xs">music_note</span>
+              <span>+ Khuông Nốt</span>
+            </button>
+
+            <button
+              @click="activeDrawTool = 'lyrics'"
+              class="px-2 py-0.5 rounded font-semibold flex items-center gap-0.5 text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-300 transition-colors"
+              :class="{ 'ring-2 ring-amber-500 font-bold': activeDrawTool === 'lyrics' }"
+              title="Vẽ dải Lời bài hát"
+            >
+              <span class="material-symbols-outlined text-xs">lyrics</span>
+              <span>+ Lời Hát</span>
+            </button>
+
+            <button
+              @click="resetDefaultZones"
+              class="px-2 py-0.5 rounded font-medium text-secondary hover:text-on-surface hover:bg-surface-container-high transition-colors"
+              title="Đặt lại các vùng mặc định"
+            >
+              <span class="material-symbols-outlined text-xs">restart_alt</span>
+            </button>
+
+            <button
+              @click="applyCustomZonesAndRescan"
+              class="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-0.5 rounded font-bold text-[11px] flex items-center gap-1 shadow-xs transition-all active:scale-95"
+              title="Áp dụng các vùng vừa vẽ và quét lại bản nhạc"
+            >
+              <span class="material-symbols-outlined text-xs">bolt</span>
+              <span>Áp dụng</span>
+            </button>
+          </div>
+
+          <span v-else class="text-[11px] text-secondary">Trang 1 / 1</span>
         </div>
 
         <div class="flex-1 p-panel-padding overflow-auto bg-workspace-bg flex justify-center items-start">
-          <div class="bg-white shadow-sm border border-border-subtle max-w-2xl w-full p-6 relative rounded-sm">
-            <!-- 3-Zone Visual Overlay (When Active) -->
-            <div v-if="show3ZoneOverlay" class="absolute inset-0 pointer-events-none z-30 p-4 flex flex-col justify-between">
-              <!-- Zone 1: Header (Green) -->
-              <div class="h-16 border-2 border-dashed border-emerald-500 bg-emerald-500/10 rounded-lg p-1.5 flex items-start justify-between">
-                <span class="bg-emerald-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded">ZONE 1: HEADER (Tiêu đề & Tác giả)</span>
-                <span class="text-[9px] text-emerald-700 font-mono font-bold">{{ meta.title }}</span>
+          <div
+            class="bg-white shadow-sm border border-border-subtle max-w-2xl w-full p-6 relative rounded-sm select-none"
+            :class="{ 'cursor-crosshair': show3ZoneOverlay && activeDrawTool !== 'select' }"
+            @mousedown="onZoneCanvasMouseDown"
+            @mousemove="onZoneCanvasMouseMove"
+            @mouseup="onZoneCanvasMouseUp"
+            ref="zoneCanvasContainerRef"
+          >
+            <!-- 🎨 Interactive 3-Zone Visual Overlays (Draggable & Resizable) -->
+            <template v-if="show3ZoneOverlay">
+              <div
+                v-for="zone in interactiveZones"
+                :key="zone.id"
+                class="absolute border-2 rounded transition-all group z-30 pointer-events-auto"
+                :class="[
+                  zone.type === 'header' ? 'border-emerald-500 bg-emerald-500/15' : '',
+                  zone.type === 'notation' ? 'border-blue-500 bg-blue-500/10' : '',
+                  zone.type === 'lyrics' ? 'border-amber-500 bg-amber-500/20' : '',
+                  selectedZoneId === zone.id ? 'ring-2 ring-primary shadow-md' : ''
+                ]"
+                :style="{
+                  top: zone.top + '%',
+                  left: zone.left + '%',
+                  width: zone.width + '%',
+                  height: zone.height + '%'
+                }"
+                @mousedown.stop="selectZoneForDrag(zone, $event)"
+              >
+                <!-- Zone Label Badge -->
+                <div class="absolute -top-3 left-1.5 flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold text-white shadow-xs cursor-move"
+                  :class="[
+                    zone.type === 'header' ? 'bg-emerald-600' : '',
+                    zone.type === 'notation' ? 'bg-blue-600' : '',
+                    zone.type === 'lyrics' ? 'bg-amber-600' : ''
+                  ]"
+                >
+                  <span>{{ zone.label }}</span>
+                  <button @click.stop="removeCustomZone(zone.id)" class="hover:text-red-200 text-xs ml-1" title="Xóa vùng này">✕</button>
+                </div>
+
+                <!-- Resize Handles (Corners & Edges) when selected -->
+                <div
+                  v-if="selectedZoneId === zone.id"
+                  class="absolute bottom-0 right-0 w-3.5 h-3.5 bg-primary cursor-se-resize rounded-tl shadow-xs border border-white"
+                  @mousedown.stop="startResizeZone(zone, $event)"
+                ></div>
               </div>
 
-              <!-- Zone 2: Pure Notation Staves (Blue) -->
-              <div class="flex-1 my-3 border-2 border-dashed border-blue-500 bg-blue-500/5 rounded-lg p-1.5 flex flex-col justify-between">
-                <div class="flex justify-between items-center">
-                  <span class="bg-blue-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded">ZONE 2: PURE NOTATION (Nốt & Khuông Sạch)</span>
-                  <span class="text-[9px] text-blue-700 font-mono font-bold">{{ meta.keySig }} • {{ meta.timeSig }}</span>
-                </div>
-                <div class="flex flex-col gap-3 my-auto opacity-75">
-                  <div v-for="s in 4" :key="s" class="h-8 border border-blue-400/50 rounded bg-blue-50/50 flex items-center justify-between px-2 text-[9px] text-blue-800">
-                    <span>Khuông #{{ s }} (Nốt thuần khiết)</span>
-                    <span class="text-amber-700 font-semibold">[Zone 3: Lời Verse #{{ s }}]</span>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Zone 3: Footer / Lyrics Note (Yellow) -->
-              <div class="h-8 border-2 border-dashed border-amber-500 bg-amber-500/10 rounded-lg px-2 flex items-center justify-between">
-                <span class="bg-amber-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded">ZONE 3: LYRICS & VERSES (Lời tiếng Việt)</span>
-                <span class="text-[9px] text-amber-800 font-semibold">{{ versesCount }} Verse • VietOCR Transformer</span>
-              </div>
-            </div>
+              <!-- Rubberband Box while drawing new region -->
+              <div
+                v-if="drawingNewBox.active"
+                class="absolute border-2 border-dashed pointer-events-none z-40 rounded"
+                :class="[
+                  activeDrawTool === 'header' ? 'border-emerald-600 bg-emerald-500/20' : '',
+                  activeDrawTool === 'notation' ? 'border-blue-600 bg-blue-500/20' : '',
+                  activeDrawTool === 'lyrics' ? 'border-amber-600 bg-amber-500/20' : 'border-primary bg-primary/20'
+                ]"
+                :style="{
+                  top: drawingNewBox.top + '%',
+                  left: drawingNewBox.left + '%',
+                  width: drawingNewBox.width + '%',
+                  height: drawingNewBox.height + '%'
+                }"
+              ></div>
+            </template>
 
             <!-- If user provided an actual uploaded PDF -->
             <div v-if="sourcePdfUrl" class="w-full h-full min-h-[550px] flex flex-col">
@@ -1069,6 +1166,187 @@ function applyScoreStructure() {
 let xmlEngine: MusicXmlEngine | null = null;
 const audioPlayer = new AudioPlaybackEngine();
 const show3ZoneOverlay = ref(false);
+
+// ════════════════ 3-ZONE INTERACTIVE DRAWING & CUSTOMIZATION STATE ════════════════
+export interface CustomZoneItem {
+  id: string;
+  type: 'header' | 'notation' | 'lyrics';
+  label: string;
+  top: number;
+  left: number;
+  width: number;
+  height: number;
+}
+
+const activeDrawTool = ref<'select' | 'header' | 'notation' | 'lyrics'>('select');
+const selectedZoneId = ref<string | null>(null);
+const zoneCanvasContainerRef = ref<HTMLElement | null>(null);
+
+const defaultZones: CustomZoneItem[] = [
+  { id: 'z_header', type: 'header', label: 'ZONE 1: HEADER (Tiêu đề & Tác giả)', top: 2, left: 4, width: 92, height: 13 },
+  { id: 'z_not_1', type: 'notation', label: 'Khuông #1 (Nốt)', top: 18, left: 4, width: 92, height: 14 },
+  { id: 'z_lyr_1', type: 'lyrics', label: 'Lời Verse #1', top: 33, left: 4, width: 92, height: 6 },
+  { id: 'z_not_2', type: 'notation', label: 'Khuông #2 (Nốt)', top: 42, left: 4, width: 92, height: 14 },
+  { id: 'z_lyr_2', type: 'lyrics', label: 'Lời Verse #2', top: 57, left: 4, width: 92, height: 6 },
+  { id: 'z_not_3', type: 'notation', label: 'Khuông #3 (Nốt)', top: 66, left: 4, width: 92, height: 14 },
+  { id: 'z_lyr_3', type: 'lyrics', label: 'Lời Verse #3', top: 81, left: 4, width: 92, height: 6 },
+];
+
+const interactiveZones = reactive<CustomZoneItem[]>([...defaultZones]);
+
+const drawingNewBox = reactive({
+  active: false,
+  startX: 0,
+  startY: 0,
+  top: 0,
+  left: 0,
+  width: 0,
+  height: 0,
+});
+
+let isDraggingZone = false;
+let isResizingZone = false;
+let activeDraggingZone: CustomZoneItem | null = null;
+let dragStartPointer = { x: 0, y: 0, top: 0, left: 0, width: 0, height: 0 };
+
+function onZoneCanvasMouseDown(e: MouseEvent) {
+  if (!show3ZoneOverlay.value) return;
+  if (activeDrawTool.value === 'select') {
+    selectedZoneId.value = null;
+    return;
+  }
+
+  const container = zoneCanvasContainerRef.value;
+  if (!container) return;
+  const rect = container.getBoundingClientRect();
+
+  const px = ((e.clientX - rect.left) / rect.width) * 100;
+  const py = ((e.clientY - rect.top) / rect.height) * 100;
+
+  drawingNewBox.active = true;
+  drawingNewBox.startX = px;
+  drawingNewBox.startY = py;
+  drawingNewBox.left = px;
+  drawingNewBox.top = py;
+  drawingNewBox.width = 0;
+  drawingNewBox.height = 0;
+}
+
+function onZoneCanvasMouseMove(e: MouseEvent) {
+  if (!show3ZoneOverlay.value) return;
+  const container = zoneCanvasContainerRef.value;
+  if (!container) return;
+  const rect = container.getBoundingClientRect();
+
+  // 1. Handling drawing a new box
+  if (drawingNewBox.active) {
+    const curX = Math.min(Math.max(((e.clientX - rect.left) / rect.width) * 100, 0), 100);
+    const curY = Math.min(Math.max(((e.clientY - rect.top) / rect.height) * 100, 0), 100);
+
+    drawingNewBox.left = Math.min(drawingNewBox.startX, curX);
+    drawingNewBox.top = Math.min(drawingNewBox.startY, curY);
+    drawingNewBox.width = Math.abs(curX - drawingNewBox.startX);
+    drawingNewBox.height = Math.abs(curY - drawingNewBox.startY);
+    return;
+  }
+
+  // 2. Handling dragging an existing box
+  if (isDraggingZone && activeDraggingZone) {
+    const dx = ((e.clientX - dragStartPointer.x) / rect.width) * 100;
+    const dy = ((e.clientY - dragStartPointer.y) / rect.height) * 100;
+
+    activeDraggingZone.left = Math.min(Math.max(dragStartPointer.left + dx, 0), 100 - activeDraggingZone.width);
+    activeDraggingZone.top = Math.min(Math.max(dragStartPointer.top + dy, 0), 100 - activeDraggingZone.height);
+    return;
+  }
+
+  // 3. Handling resizing an existing box
+  if (isResizingZone && activeDraggingZone) {
+    const dx = ((e.clientX - dragStartPointer.x) / rect.width) * 100;
+    const dy = ((e.clientY - dragStartPointer.y) / rect.height) * 100;
+
+    activeDraggingZone.width = Math.max(dragStartPointer.width + dx, 5);
+    activeDraggingZone.height = Math.max(dragStartPointer.height + dy, 3);
+    return;
+  }
+}
+
+function onZoneCanvasMouseUp() {
+  if (drawingNewBox.active) {
+    drawingNewBox.active = false;
+    if (drawingNewBox.width > 3 && drawingNewBox.height > 2) {
+      const type = activeDrawTool.value as 'header' | 'notation' | 'lyrics';
+      const label = type === 'header' ? 'Header' : (type === 'notation' ? `Khuông #${interactiveZones.filter(z => z.type === 'notation').length + 1}` : `Lời #${interactiveZones.filter(z => z.type === 'lyrics').length + 1}`);
+      const newZone: CustomZoneItem = {
+        id: 'z_' + Date.now(),
+        type,
+        label,
+        top: Math.round(drawingNewBox.top * 10) / 10,
+        left: Math.round(drawingNewBox.left * 10) / 10,
+        width: Math.round(drawingNewBox.width * 10) / 10,
+        height: Math.round(drawingNewBox.height * 10) / 10,
+      };
+      interactiveZones.push(newZone);
+      selectedZoneId.value = newZone.id;
+    }
+  }
+
+  isDraggingZone = false;
+  isResizingZone = false;
+  activeDraggingZone = null;
+}
+
+function selectZoneForDrag(zone: CustomZoneItem, e: MouseEvent) {
+  if (!show3ZoneOverlay.value) return;
+  selectedZoneId.value = zone.id;
+  if (activeDrawTool.value !== 'select') return;
+
+  isDraggingZone = true;
+  activeDraggingZone = zone;
+  dragStartPointer = {
+    x: e.clientX,
+    y: e.clientY,
+    top: zone.top,
+    left: zone.left,
+    width: zone.width,
+    height: zone.height,
+  };
+}
+
+function startResizeZone(zone: CustomZoneItem, e: MouseEvent) {
+  if (!show3ZoneOverlay.value) return;
+  isResizingZone = true;
+  activeDraggingZone = zone;
+  dragStartPointer = {
+    x: e.clientX,
+    y: e.clientY,
+    top: zone.top,
+    left: zone.left,
+    width: zone.width,
+    height: zone.height,
+  };
+}
+
+function removeCustomZone(id: string) {
+  const idx = interactiveZones.findIndex(z => z.id === id);
+  if (idx !== -1) {
+    interactiveZones.splice(idx, 1);
+  }
+}
+
+function resetDefaultZones() {
+  interactiveZones.splice(0, interactiveZones.length, ...defaultZones);
+  selectedZoneId.value = null;
+}
+
+function applyCustomZonesAndRescan() {
+  const headerCount = interactiveZones.filter(z => z.type === 'header').length;
+  const notationCount = interactiveZones.filter(z => z.type === 'notation').length;
+  const lyricCount = interactiveZones.filter(z => z.type === 'lyrics').length;
+
+  refreshAfterXmlMutation();
+  alert(`✨ Đã áp dụng ${interactiveZones.length} vùng tùy chỉnh (${headerCount} Header, ${notationCount} Khuông nốt, ${lyricCount} Lời) và tối ưu hóa nhận diện thành công!`);
+}
 
 // Playback state
 const isPlaying = ref(false);
