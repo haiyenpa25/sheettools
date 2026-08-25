@@ -17,15 +17,15 @@ export interface ProjectItem {
   xmlContent?: string;
 }
 
-const STORAGE_KEY = 'sheet_converter_projects_v11';
+const STORAGE_KEY = 'sheet_converter_projects_v12';
 
-// Default initial projects with accurate MusicXML content
+// Danh sách các bản nhạc chuẩn mẫu (Chỉ nạp lần đầu tiên khi chưa có dữ liệu)
 const initialProjects: ProjectItem[] = [
   {
     id: 'p_001',
     title: 'TỪ CÕI LÒNG SÂU THẲM',
     composer: 'Nguyễn Đình Tiến',
-    date: '24/08/2026',
+    date: '25/08/2026',
     status: 'READY',
     verses: 1,
     keySig: 'E minor / G Major',
@@ -39,7 +39,7 @@ const initialProjects: ProjectItem[] = [
     id: 'p_002',
     title: 'TRỌN CẢ TẤM LÒNG',
     composer: 'Tôn Vinh Chúa Hằng Hữu',
-    date: '24/08/2026',
+    date: '25/08/2026',
     status: 'READY',
     verses: 2,
     keySig: 'G Major',
@@ -49,40 +49,17 @@ const initialProjects: ProjectItem[] = [
     xmlContent: OmrTranscriptionService.generateTronCaTamLong(),
   },
   {
-    id: 'p_doxology',
-    title: 'TÔN VINH CHÂN THẦN',
-    composer: 'Louis Bourgeois, 1551',
+    id: 'p_003',
+    title: '001 HỠI THÁNH VƯƠNG, KÍP NGỰ LAI',
+    composer: 'Felice de Giardini, 1769',
     date: '12/10/2023',
     status: 'READY',
     verses: 4,
     keySig: 'G Major',
-    timeSig: '4/4',
+    timeSig: '3/4',
     sourceFilename: '001 Hỡi Thánh Vương, Kíp Ngự Lai.pdf',
+    sourcePdfUrl: '/samples/001_hoi_thanh_vuong/score.xml',
     xmlContent: OmrTranscriptionService.generateTonVinhChanThan(),
-  },
-  {
-    id: 'p_045',
-    title: '045 Chúa Chăn Nuôi Tôi',
-    composer: 'T. Koschat',
-    date: '11/10/2023',
-    status: 'NEEDS_REVIEW',
-    verses: 3,
-    keySig: 'F Major',
-    timeSig: '4/4',
-    sourceFilename: '045_Chua_Chan_Nuoi_Toi.png',
-    xmlContent: OmrTranscriptionService.generateChuaChanNuoiToi(),
-  },
-  {
-    id: 'p_089',
-    title: '089 Tâm Hồn Chúc Tụng',
-    composer: 'Jonas Myrin & Matt Redman',
-    date: '12/10/2023',
-    status: 'READY',
-    verses: 4,
-    keySig: 'G Major',
-    timeSig: '4/4',
-    sourceFilename: '089_Tam_Hon_Chuc_Tung.jpg',
-    xmlContent: OmrTranscriptionService.generateTamHonChucTung(),
   },
 ];
 
@@ -98,9 +75,10 @@ class ProjectStore {
   private loadFromStorage(): void {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
+      if (raw !== null) {
         const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) {
+        if (Array.isArray(parsed)) {
+          // Nạp đúng danh sách người dùng đã lưu (kể cả khi đã xoá rỗng)
           this.projects.splice(0, this.projects.length, ...parsed);
           return;
         }
@@ -108,6 +86,7 @@ class ProjectStore {
     } catch (e) {
       console.warn('Failed to load projects from storage, using defaults:', e);
     }
+    // Chỉ nạp initialProjects vào lần đầu tiên mở ứng dụng
     this.projects.splice(0, this.projects.length, ...initialProjects);
     this.saveToStorage();
   }
@@ -121,38 +100,23 @@ class ProjectStore {
   }
 
   /**
-   * Đồng bộ danh sách dự án thực tế từ Backend API
+   * Đồng bộ trạng thái từ Backend API
    */
   public async syncWithBackend(): Promise<void> {
     try {
       const res = await fetch('/api/conversions').then(r => r.json()).catch(() => null);
       if (res && Array.isArray(res.data) && res.data.length > 0) {
         for (const item of res.data) {
+          if (!item.uuid) continue;
           const existing = this.projects.find(p => p.id === item.uuid || p.uuid === item.uuid);
           if (existing) {
             existing.status = item.status === 'NEEDS_REVIEW' ? 'NEEDS_REVIEW' : (item.status === 'READY' ? 'READY' : 'PROCESSING');
-          } else {
-            // Thêm dự án mới từ backend
-            const dateStr = item.createdAt ? new Date(item.createdAt).toLocaleDateString('vi-VN') : 'Hôm nay';
-            const rawTitle = (item.sourceFilename || 'Bản nhạc mới').replace(/\.[^/.]+$/, '');
-            this.projects.push({
-              id: item.uuid,
-              uuid: item.uuid,
-              title: rawTitle,
-              composer: 'Tác giả bài hát',
-              date: dateStr,
-              status: item.status === 'NEEDS_REVIEW' ? 'NEEDS_REVIEW' : 'READY',
-              verses: 2,
-              keySig: 'G Major',
-              timeSig: '2/4',
-              sourceFilename: item.sourceFilename,
-            });
           }
         }
         this.saveToStorage();
       }
     } catch (e) {
-      console.log('Backend sync notice (running standalone):', e);
+      console.log('Backend sync notice:', e);
     }
   }
 
@@ -221,17 +185,20 @@ class ProjectStore {
       const proj = this.projects[idx];
       const uuid = proj.uuid || (id.length > 20 ? id : undefined);
       
+      // 1. Xóa ngay lập tức khỏi mảng reactive và lưu localStorage
       this.projects.splice(idx, 1);
-      if (this.activeProjectId.value === id && this.projects.length > 0) {
-        this.activeProjectId.value = this.projects[0].id;
+      if (this.activeProjectId.value === id) {
+        this.activeProjectId.value = this.projects.length > 0 ? this.projects[0].id : '';
       }
       this.saveToStorage();
 
-      // Gọi API xóa vĩnh viễn trên ổ đĩa backend
+      // 2. Gọi API xóa vĩnh viễn trên ổ đĩa backend
       if (uuid) {
-        fetch(`/api/conversions/${uuid}`, { method: 'DELETE' }).catch(err => {
+        try {
+          await fetch(`/api/conversions/${uuid}`, { method: 'DELETE' });
+        } catch (err) {
           console.warn('Could not delete project from backend:', err);
-        });
+        }
       }
       return true;
     }
