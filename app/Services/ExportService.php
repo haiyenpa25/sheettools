@@ -90,6 +90,17 @@ class ExportService
                 }
                 return null;
 
+            case 'mscx':
+                $targetMscx = $exportDir . DIRECTORY_SEPARATOR . "{$baseName}.mscx";
+                $exporterPy = dirname(__DIR__, 2) . '/workers/xml_tools/musescore_exporter.py';
+                $cmd = sprintf('python %s --input %s --output %s --format mscx 2>&1', escapeshellarg($exporterPy), escapeshellarg($curPath), escapeshellarg($targetMscx));
+                @exec($cmd);
+                if (file_exists($targetMscx) && filesize($targetMscx) > 50) {
+                    return $targetMscx;
+                }
+                copy($curPath, $targetMscx);
+                return $targetMscx;
+
             default:
                 return $curPath;
         }

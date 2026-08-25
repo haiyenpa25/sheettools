@@ -84,6 +84,23 @@
           </button>
 
           <button
+            @click="download('mscx')"
+            class="w-full text-left p-4 border border-border-subtle rounded-lg hover:border-primary hover:bg-sync-active-highlight transition-all flex items-center gap-4 group"
+          >
+            <div class="w-10 h-10 rounded bg-primary/10 text-primary flex items-center justify-center font-mono-label font-bold text-sm group-hover:bg-primary group-hover:text-on-primary transition-colors">
+              MS
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2">
+                <span class="font-body-md text-sm font-bold text-on-surface">.mscx (MuseScore)</span>
+                <span class="bg-primary/10 text-primary text-[10px] font-semibold px-2 py-0.5 rounded-full">MuseScore 4</span>
+              </div>
+              <p class="font-label-sm text-xs text-secondary mt-0.5">Tệp dự án mở trực tiếp trong MuseScore 4 / MuseScore 3</p>
+            </div>
+            <span class="material-symbols-outlined text-secondary group-hover:text-primary transition-colors">arrow_forward</span>
+          </button>
+
+          <button
             @click="printScore"
             class="w-full text-left p-4 border border-border-subtle rounded-lg hover:border-primary hover:bg-sync-active-highlight transition-all flex items-center gap-4 group"
           >
