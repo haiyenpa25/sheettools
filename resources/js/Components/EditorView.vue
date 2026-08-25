@@ -258,12 +258,51 @@
         <div class="h-8 bg-surface-container-low border-b border-border-subtle flex items-center px-3 justify-between shrink-0">
           <span class="font-label-sm text-xs text-on-surface font-semibold uppercase tracking-wider">Source (Bản PDF / Ảnh Scan Gốc)</span>
           <div class="flex items-center gap-2">
+            <!-- 3-Zone Inspector Toggle -->
+            <button
+              @click="show3ZoneOverlay = !show3ZoneOverlay"
+              class="px-2 py-0.5 rounded text-[11px] font-bold flex items-center gap-1 transition-all"
+              :class="show3ZoneOverlay ? 'bg-primary text-on-primary shadow-xs' : 'bg-surface-container-high text-secondary hover:text-on-surface'"
+              title="Bật/Tắt hiển thị trực quan 3 Vùng Không Gian (Header, Nốt sạch, Lời hát)"
+            >
+              <span class="material-symbols-outlined text-xs">layers</span>
+              <span>3-Zone</span>
+            </button>
             <span class="text-[11px] text-secondary">Trang 1 / 1</span>
           </div>
         </div>
 
         <div class="flex-1 p-panel-padding overflow-auto bg-workspace-bg flex justify-center items-start">
           <div class="bg-white shadow-sm border border-border-subtle max-w-2xl w-full p-6 relative rounded-sm">
+            <!-- 3-Zone Visual Overlay (When Active) -->
+            <div v-if="show3ZoneOverlay" class="absolute inset-0 pointer-events-none z-30 p-4 flex flex-col justify-between">
+              <!-- Zone 1: Header (Green) -->
+              <div class="h-16 border-2 border-dashed border-emerald-500 bg-emerald-500/10 rounded-lg p-1.5 flex items-start justify-between">
+                <span class="bg-emerald-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded">ZONE 1: HEADER (Tiêu đề & Tác giả)</span>
+                <span class="text-[9px] text-emerald-700 font-mono font-bold">{{ meta.title }}</span>
+              </div>
+
+              <!-- Zone 2: Pure Notation Staves (Blue) -->
+              <div class="flex-1 my-3 border-2 border-dashed border-blue-500 bg-blue-500/5 rounded-lg p-1.5 flex flex-col justify-between">
+                <div class="flex justify-between items-center">
+                  <span class="bg-blue-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded">ZONE 2: PURE NOTATION (Nốt & Khuông Sạch)</span>
+                  <span class="text-[9px] text-blue-700 font-mono font-bold">{{ meta.keySig }} • {{ meta.timeSig }}</span>
+                </div>
+                <div class="flex flex-col gap-3 my-auto opacity-75">
+                  <div v-for="s in 4" :key="s" class="h-8 border border-blue-400/50 rounded bg-blue-50/50 flex items-center justify-between px-2 text-[9px] text-blue-800">
+                    <span>Khuông #{{ s }} (Nốt thuần khiết)</span>
+                    <span class="text-amber-700 font-semibold">[Zone 3: Lời Verse #{{ s }}]</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Zone 3: Footer / Lyrics Note (Yellow) -->
+              <div class="h-8 border-2 border-dashed border-amber-500 bg-amber-500/10 rounded-lg px-2 flex items-center justify-between">
+                <span class="bg-amber-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded">ZONE 3: LYRICS & VERSES (Lời tiếng Việt)</span>
+                <span class="text-[9px] text-amber-800 font-semibold">{{ versesCount }} Verse • VietOCR Transformer</span>
+              </div>
+            </div>
+
             <!-- If user provided an actual uploaded PDF -->
             <div v-if="sourcePdfUrl" class="w-full h-full min-h-[550px] flex flex-col">
               <iframe
@@ -646,6 +685,16 @@
               + Thêm
             </button>
 
+            <!-- ✨ AI Auto-Harmonize Button -->
+            <button
+              @click="triggerAutoHarmonize"
+              class="bg-amber-600 hover:bg-amber-700 text-white px-3.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow-sm ml-auto"
+              title="Phân tích nốt nhạc trong từng ô nhịp và tự động gợi ý điền hợp âm chuẩn theo giọng bài hát"
+            >
+              <span class="material-symbols-outlined text-sm">auto_awesome</span>
+              <span>Gợi ý Hợp âm AI</span>
+            </button>
+
             <!-- Quick Presets Palette -->
             <div class="space-y-2 w-full pt-1 border-t border-border-subtle">
               <div class="flex flex-wrap items-center gap-1.5">
@@ -1019,6 +1068,7 @@ function applyScoreStructure() {
 // Engine instances
 let xmlEngine: MusicXmlEngine | null = null;
 const audioPlayer = new AudioPlaybackEngine();
+const show3ZoneOverlay = ref(false);
 
 // Playback state
 const isPlaying = ref(false);
@@ -1494,6 +1544,17 @@ function addChord() {
   if (ok) {
     newChordText.value = '';
     refreshAfterXmlMutation();
+  }
+}
+
+function triggerAutoHarmonize() {
+  if (!xmlEngine) return;
+  const count = xmlEngine.autoHarmonizeAllMeasures();
+  if (count > 0) {
+    refreshAfterXmlMutation();
+    alert(`✨ Đã tự động phân tích nhạc lý và bổ sung hợp âm chuẩn cho ${count} ô nhịp!`);
+  } else {
+    alert('Tất cả các ô nhịp đã có hợp âm đầy đủ!');
   }
 }
 

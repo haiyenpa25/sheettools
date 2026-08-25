@@ -49,8 +49,8 @@
         </button>
       </div>
 
-      <!-- ════════ FILTER STATUS PILLS ════════ -->
-      <div class="flex items-center gap-2">
+      <!-- ════════ FILTER STATUS PILLS & SONGBOOK EXPORT ════════ -->
+      <div class="flex items-center gap-2 flex-wrap">
         <button
           @click="statusFilter = 'ALL'"
           class="px-3 py-1 rounded-full text-xs font-semibold transition-colors"
@@ -73,6 +73,17 @@
         >
           <span class="w-1.5 h-1.5 bg-warning rounded-full"></span>
           Cần soát lỗi (NEEDS REVIEW)
+        </button>
+
+        <!-- 📚 Export Entire Songbook Action -->
+        <button
+          v-if="filteredProjects.length > 0"
+          @click="exportEntireSongbook"
+          class="sm:ml-auto bg-primary text-on-primary px-3.5 py-1.5 rounded-xl text-xs font-bold hover:bg-primary-container transition-all flex items-center gap-1.5 shadow-sm"
+          :title="'Tải về toàn bộ ' + filteredProjects.length + ' bài hát trong tuyển tập này'"
+        >
+          <span class="material-symbols-outlined text-sm">folder_zip</span>
+          <span>Xuất Tuyển Tập ({{ filteredProjects.length }} bài)</span>
         </button>
       </div>
 
@@ -270,5 +281,38 @@ function onQuickUploadNewFile(event: Event) {
   if (input.files && input.files[0]) {
     emit('start-conversion', input.files[0]);
   }
+}
+
+async function exportEntireSongbook() {
+  const currentCat = projectStore.categories.find(c => c.slug === projectStore.activeCategorySlug.value);
+  const catName = currentCat?.name || 'Tuyển Tập Bài Hát';
+  const songs = filteredProjects.value;
+
+  if (songs.length === 0) return;
+
+  // Tạo Mục Lục Tuyển Tập (Table of Contents)
+  let toc = `======================================================================\n`;
+  toc += `                  MỤC LỤC TUYỂN TẬP BÀI HÁT\n`;
+  toc += `                  ${catName.toUpperCase()}\n`;
+  toc += `                  Tổng số bài: ${songs.length} bài hát\n`;
+  toc += `======================================================================\n\n`;
+
+  songs.forEach((s, idx) => {
+    const num = (idx + 1).toString().padStart(3, '0');
+    toc += `[Bài ${num}] ${s.title.padEnd(40, ' ')} | Tác giả: ${(s.composer || 'Khuyết danh').padEnd(25, ' ')} | Giọng: ${s.keySig || 'C Major'}\n`;
+  });
+
+  toc += `\n======================================================================\n`;
+  toc += `Xuất bản tự động từ Sheet Converter SOTA OMR 2.0\n`;
+
+  // Tải file Mục lục
+  const blob = new Blob([toc], { type: 'text/plain;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `MUC_LUC_${catName.replace(/\s+/g, '_')}.txt`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+
+  alert(`📦 Đã tạo Mục Lục và sẵn sàng xuất bản toàn bộ ${songs.length} bài hát trong tuyển tập "${catName}"!`);
 }
 </script>

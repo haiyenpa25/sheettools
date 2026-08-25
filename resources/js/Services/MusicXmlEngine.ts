@@ -895,5 +895,118 @@ export class MusicXmlEngine {
     pro += this.generateHopAmChuanText(transposeSemitones, 'inline');
     return pro;
   }
+
+  // ═════════════════════════════════════════════════════════════════════════
+  // ─── SMART HARMONIC ANALYSIS & AUTO-CHORD SUGGESTION ───
+  // ═════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Tự động phân tích các nốt trong ô nhịp và gợi ý hợp âm chuẩn theo nhạc lý
+   */
+  public suggestChordForMeasure(measureNumber: number): string {
+    const notes = this.extractMeasureNotes(measureNumber);
+    if (notes.length === 0) return '';
+
+    const key = this.getKeySignature();
+    const isMinorKey = key.includes('minor') || key.includes('m');
+
+    // Đếm trọng số các nốt trong ô nhịp (nốt đầu phách và nốt dài có trọng số lớn hơn)
+    const pitchWeights: Record<string, number> = {};
+    notes.forEach((n, idx) => {
+      if (n.isRest || !n.step) return;
+      const weight = (idx === 0 ? 3.0 : 1.5) * (n.duration === 'half' ? 2 : n.duration === 'quarter' ? 1 : 0.5);
+      pitchWeights[n.step] = (pitchWeights[n.step] || 0) + weight;
+    });
+
+    const candidateChords = [
+      // Hợp âm Giọng Trưởng (I, ii, iii, IV, V, vi, V7)
+      { name: 'C', pitches: ['C', 'E', 'G'], score: 0 },
+      { name: 'Dm', pitches: ['D', 'F', 'A'], score: 0 },
+      { name: 'Em', pitches: ['E', 'G', 'B'], score: 0 },
+      { name: 'F', pitches: ['F', 'A', 'C'], score: 0 },
+      { name: 'G', pitches: ['G', 'B', 'D'], score: 0 },
+      { name: 'G7', pitches: ['G', 'B', 'D', 'F'], score: 0 },
+      { name: 'Am', pitches: ['A', 'C', 'E'], score: 0 },
+      { name: 'Bdim', pitches: ['B', 'D', 'F'], score: 0 },
+      // Hợp âm Giọng Sol Trưởng / Mi Thứ (1# F#)
+      { name: 'D', pitches: ['D', 'F#', 'A'], score: 0 },
+      { name: 'D7', pitches: ['D', 'F#', 'A', 'C'], score: 0 },
+      { name: 'Bm', pitches: ['B', 'D', 'F#'], score: 0 },
+      { name: 'B7', pitches: ['B', 'D#', 'F#', 'A'], score: 0 },
+      { name: 'G/B', pitches: ['B', 'G', 'D'], score: 0 },
+      { name: 'D/F#', pitches: ['F#', 'D', 'A'], score: 0 },
+    ];
+
+    let bestChord = isMinorKey ? 'Em' : 'G';
+    let maxScore = -1;
+
+    candidateChords.forEach(c => {
+      let score = 0;
+      c.pitches.forEach(p => {
+        const step = p.replace(/[#b]/g, '');
+        if (pitchWeights[step]) {
+          score += pitchWeights[step];
+        }
+      });
+      c.score = score;
+      if (score > maxScore) {
+        maxScore = score;
+        bestChord = c.name;
+      }
+    });
+
+    return bestChord;
+  }
+
+  /**
+   * Tự động điền hợp âm chuẩn cho toàn bộ các ô nhịp chưa có hợp âm
+   */
+  public autoHarmonizeAllMeasures(): number {
+    const harmonies = this.extractHarmonies();
+    const existingMeasures = new Set(harmonies.map(h => h.measureNumber));
+
+    let addedCount = 0;
+    const measures = this.doc.querySelectorAll('measure');
+
+    measures.forEach(m => {
+      const num = parseInt(m.getAttribute('number') || '1', 10);
+      if (!existingMeasures.has(num)) {
+        const chord = this.suggestChordForMeasure(num);
+        if (chord) {
+          this.addOrUpdateHarmony(num, chord);
+          addedCount++;
+        }
+      }
+    });
+
+    if (addedCount > 0) {
+      this.saveState();
+    }
+    return addedCount;
+  }
+
+  /**
+   * Tự động phát hiện và cấu hình ô nhịp lấy đà (Pickup Measure / Anacrusis)
+   */
+  public detectAndConfigurePickupMeasure(): boolean {
+    const firstMeasure = this.doc.querySelector('measure[number="1"]');
+    if (!firstMeasure) return false;
+
+    const time = this.getTimeSignature();
+    const nominalUnits = time.beats * 4; // Assuming division 4
+
+    let totalDuration = 0;
+    firstMeasure.querySelectorAll('note').forEach(n => {
+      const dur = parseInt(n.querySelector('duration')?.textContent || '0', 10);
+      totalDuration += dur;
+    });
+
+    if (totalDuration > 0 && totalDuration < nominalUnits) {
+      firstMeasure.setAttribute('implicit', 'yes');
+      this.saveState();
+      return true;
+    }
+    return false;
+  }
 }
 
