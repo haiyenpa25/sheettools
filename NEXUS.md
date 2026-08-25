@@ -120,6 +120,31 @@ Mỗi thư mục bài hát con chứa:
 
 ---
 
+## 4. BẢN ĐỒ PHÂN TÁCH 3 VÙNG (3-ZONE SPATIAL DECOMPOSITION PIPELINE)
+
+```mermaid
+graph TD
+    SourceSheet[Ảnh Scan / PDF Gốc] --> Decompose[vietnamese_universal_ocr.py: decompose_sheet_3zones]
+    
+    Decompose -->|Zone 1: y < Staff0| HeaderZone[Zone 1: Header - Tiêu đề & Tác giả]
+    Decompose -->|Zone 2: Mask all text| NotationZone[Zone 2: Pure Notation Sheet - Nốt sạch 100%]
+    Decompose -->|Zone 3: Below staves| LyricsZone[Zone 3: Lyrics & Verses - Lời ca tiếng Việt]
+    
+    HeaderZone --> VietOcrMeta[VietOCR Transformer Metadata Extraction]
+    NotationZone --> OmrEngine[Audiveris / CV OMR Engine: Staves, Clefs, Notes, Rests]
+    LyricsZone --> VietOcrTransformer[VietOCR VGG-Transformer: Syllable Alignment]
+    
+    VietOcrMeta --> MasterXml[Master Clean MusicXML 4.0]
+    OmrEngine --> MasterXml
+    VietOcrTransformer --> MasterXml
+    
+    MasterXml --> EditorView[EditorView.vue: Split-View 50/50 + Interactive 3-Zone Canvas]
+    EditorView --> AutoHarmonize[AI Smart Auto-Harmonize]
+    EditorView --> ExportModal[ExportModal.vue: 3-in-1 Export Center]
+```
+
+---
+
 ## 4. KẾT QUẢ KIỂM THỬ TỰ ĐỘNG (AUTOMATED TEST SUITE)
 
 Tất cả các bài kiểm tra trong `tests/Feature/ApiTest.php` đều vượt qua với tỷ lệ thành công 100%:
