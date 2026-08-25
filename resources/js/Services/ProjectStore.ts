@@ -3,6 +3,7 @@ import { OmrTranscriptionService } from './OmrTranscriptionService';
 
 export interface ProjectItem {
   id: string;
+  uuid?: string;
   title: string;
   composer?: string;
   date: string;
@@ -16,7 +17,7 @@ export interface ProjectItem {
   xmlContent?: string;
 }
 
-const STORAGE_KEY = 'sheet_converter_projects_v10';
+const STORAGE_KEY = 'sheet_converter_projects_v11';
 
 // Default initial projects with accurate MusicXML content
 const initialProjects: ProjectItem[] = [
@@ -31,6 +32,7 @@ const initialProjects: ProjectItem[] = [
     timeSig: '2/4',
     sourceFilename: '1.pdf',
     sourceImageUrl: '/golden.png',
+    sourcePdfUrl: '/samples/002_tu_coi_long/source.pdf',
     xmlContent: OmrTranscriptionService.generateTuCoiLongSauTham(),
   },
   {
@@ -43,6 +45,7 @@ const initialProjects: ProjectItem[] = [
     keySig: 'G Major',
     timeSig: '4/4',
     sourceFilename: '2.pdf',
+    sourcePdfUrl: '/samples/003_tron_ca_tam_long/source.pdf',
     xmlContent: OmrTranscriptionService.generateTronCaTamLong(),
   },
   {
@@ -89,6 +92,7 @@ class ProjectStore {
 
   constructor() {
     this.loadFromStorage();
+    this.syncWithBackend();
   }
 
   private loadFromStorage(): void {
@@ -116,6 +120,42 @@ class ProjectStore {
     }
   }
 
+  /**
+   * Đồng bộ danh sách dự án thực tế từ Backend API
+   */
+  public async syncWithBackend(): Promise<void> {
+    try {
+      const res = await fetch('/api/conversions').then(r => r.json()).catch(() => null);
+      if (res && Array.isArray(res.data) && res.data.length > 0) {
+        for (const item of res.data) {
+          const existing = this.projects.find(p => p.id === item.uuid || p.uuid === item.uuid);
+          if (existing) {
+            existing.status = item.status === 'NEEDS_REVIEW' ? 'NEEDS_REVIEW' : (item.status === 'READY' ? 'READY' : 'PROCESSING');
+          } else {
+            // Thêm dự án mới từ backend
+            const dateStr = item.createdAt ? new Date(item.createdAt).toLocaleDateString('vi-VN') : 'Hôm nay';
+            const rawTitle = (item.sourceFilename || 'Bản nhạc mới').replace(/\.[^/.]+$/, '');
+            this.projects.push({
+              id: item.uuid,
+              uuid: item.uuid,
+              title: rawTitle,
+              composer: 'Tác giả bài hát',
+              date: dateStr,
+              status: item.status === 'NEEDS_REVIEW' ? 'NEEDS_REVIEW' : 'READY',
+              verses: 2,
+              keySig: 'G Major',
+              timeSig: '2/4',
+              sourceFilename: item.sourceFilename,
+            });
+          }
+        }
+        this.saveToStorage();
+      }
+    } catch (e) {
+      console.log('Backend sync notice (running standalone):', e);
+    }
+  }
+
   public get activeProject(): ProjectItem | undefined {
     return this.projects.find(p => p.id === this.activeProjectId.value) || this.projects[0];
   }
@@ -125,13 +165,15 @@ class ProjectStore {
     filename: string,
     sourceImageUrl?: string,
     sourcePdfUrl?: string,
-    xmlContent?: string
+    xmlContent?: string,
+    uuid?: string
   ): ProjectItem {
     const today = new Date();
     const dateStr = `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}/${today.getFullYear()}`;
 
     const newProj: ProjectItem = {
-      id: 'proj_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+      id: uuid || ('proj_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7)),
+      uuid: uuid,
       title: title.trim() || 'Bản nhạc mới',
       composer: 'Tác giả bài hát',
       date: dateStr,
@@ -151,24 +193,44 @@ class ProjectStore {
     return newProj;
   }
 
-  public deleteProject(id: string): boolean {
+  public async deleteProject(id: string): Promise<boolean> {
     const idx = this.projects.findIndex(p => p.id === id);
     if (idx !== -1) {
+      const proj = this.projects[idx];
+      const uuid = proj.uuid || (id.length > 20 ? id : undefined);
+      
       this.projects.splice(idx, 1);
       if (this.activeProjectId.value === id && this.projects.length > 0) {
         this.activeProjectId.value = this.projects[0].id;
       }
       this.saveToStorage();
+
+      // Gọi API xóa trên backend nếu có UUID
+      if (uuid) {
+        fetch(`/api/conversions/${uuid}`, { method: 'DELETE' }).catch(err => {
+          console.warn('Could not delete project from backend:', err);
+        });
+      }
       return true;
     }
     return false;
   }
 
-  public updateProject(id: string, updates: Partial<ProjectItem>): void {
+  public async updateProject(id: string, updates: Partial<ProjectItem>): Promise<void> {
     const proj = this.projects.find(p => p.id === id);
     if (proj) {
       Object.assign(proj, updates);
       this.saveToStorage();
+
+      // Đồng bộ MusicXML lên backend nếu có cập nhật nội dung XML
+      const uuid = proj.uuid || (id.length > 20 ? id : undefined);
+      if (uuid && updates.xmlContent) {
+        fetch(`/api/conversions/${uuid}/musicxml`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/xml' },
+          body: updates.xmlContent,
+        }).catch(err => console.warn('Could not sync MusicXML to backend:', err));
+      }
     }
   }
 

@@ -93,24 +93,58 @@ if (preg_match('#^/api/conversions/([a-zA-Z0-9_\-]+)(/.*)?$#', $uri, $matches)) 
 
     // GET /api/conversions/{uuid}
     if ($subPath === '' || $subPath === '/') {
-        jsonResponse(['data' => $project->toArray()]);
+        if ($method === 'GET') {
+            jsonResponse(['data' => $project->toArray()]);
+        }
+        if ($method === 'DELETE') {
+            $ok = $repo->delete($uuid);
+            jsonResponse(['success' => $ok, 'message' => 'Project deleted successfully.']);
+        }
+        if ($method === 'PATCH') {
+            $input = json_decode(file_get_contents('php://input'), true) ?: [];
+            if (isset($input['title'])) $project->sourceFilename = $input['title'];
+            if (isset($input['status'])) $project->status = $input['status'];
+            $repo->save($project);
+            jsonResponse(['success' => true, 'data' => $project->toArray()]);
+        }
     }
 
-    // GET /api/conversions/{uuid}/musicxml
-    if ($subPath === '/musicxml' && $method === 'GET') {
+    // GET, PUT, PATCH /api/conversions/{uuid}/musicxml
+    if ($subPath === '/musicxml') {
         $xmlPath = $storageService->getCurrentMusicXmlPath($uuid);
-        if (!file_exists($xmlPath) || filesize($xmlPath) < 50) {
-            $rawPath = $storageService->getRawMusicXmlPath($uuid);
-            if (file_exists($rawPath) && filesize($rawPath) >= 50) {
-                $xmlPath = $rawPath;
-            } else {
-                jsonResponse(['error' => 'MUSICXML_NOT_READY', 'message' => 'MusicXML artifact is not yet available for this project.'], 409);
+
+        if ($method === 'GET') {
+            if (!file_exists($xmlPath) || filesize($xmlPath) < 50) {
+                $rawPath = $storageService->getRawMusicXmlPath($uuid);
+                if (file_exists($rawPath) && filesize($rawPath) >= 50) {
+                    $xmlPath = $rawPath;
+                } else {
+                    jsonResponse(['error' => 'MUSICXML_NOT_READY', 'message' => 'MusicXML artifact is not yet available for this project.'], 409);
+                }
             }
+
+            header('Content-Type: application/xml; charset=utf-8');
+            readfile($xmlPath);
+            exit;
         }
 
-        header('Content-Type: application/xml; charset=utf-8');
-        readfile($xmlPath);
-        exit;
+        if (in_array($method, ['PUT', 'PATCH'], true)) {
+            $rawInput = file_get_contents('php://input');
+            $xmlData = '';
+            if (str_starts_with(trim($rawInput), '{')) {
+                $json = json_decode($rawInput, true);
+                $xmlData = $json['xml'] ?? $json['xmlContent'] ?? '';
+            } else {
+                $xmlData = $rawInput;
+            }
+
+            if (empty($xmlData) || strlen($xmlData) < 50) {
+                jsonResponse(['error' => 'INVALID_XML', 'message' => 'MusicXML data is invalid or empty.'], 400);
+            }
+
+            file_put_contents($xmlPath, $xmlData);
+            jsonResponse(['success' => true, 'message' => 'MusicXML updated successfully.', 'bytes' => strlen($xmlData)]);
+        }
     }
 
     // GET /api/conversions/{uuid}/lyrics

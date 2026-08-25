@@ -3,34 +3,54 @@
     <div class="bg-surface-container-lowest rounded-xl border border-border-subtle p-margin-main w-full shadow-xs">
       <!-- Header with Pulsing Icon -->
       <div class="text-center mb-8">
-        <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary-fixed mb-4 pulse-animation">
-          <span class="material-symbols-outlined text-primary text-3xl">memory</span>
+        <div 
+          class="inline-flex items-center justify-center w-16 h-16 rounded-full mb-4 transition-colors"
+          :class="errorMessage ? 'bg-error-container text-error' : 'bg-primary-fixed text-primary pulse-animation'"
+        >
+          <span class="material-symbols-outlined text-3xl">
+            {{ errorMessage ? 'error' : 'memory' }}
+          </span>
         </div>
         <h1 class="font-headline-md text-xl font-bold text-on-surface mb-2 truncate">
-          Đang xử lý: {{ fileName }}
+          {{ errorMessage ? 'Lỗi xử lý tệp' : `Đang nhận diện: ${fileName}` }}
         </h1>
-        <p class="font-body-md text-sm text-on-surface-variant">
-          Audiveris OMR đang làm việc, vui lòng không đóng trình duyệt.
+        <p class="font-body-md text-sm" :class="errorMessage ? 'text-error font-medium' : 'text-on-surface-variant'">
+          {{ errorMessage || 'Audiveris OMR & Tesseract OCR đang phân tích từng trang nốt nhạc...' }}
         </p>
       </div>
 
+      <!-- Error State Card if failed -->
+      <div v-if="errorMessage" class="bg-error/10 border border-error/30 rounded-lg p-4 mb-6 space-y-3">
+        <p class="text-xs text-error leading-relaxed">
+          {{ errorMessage }}
+        </p>
+        <div class="flex gap-2 justify-end">
+          <button
+            @click="$emit('cancel')"
+            class="px-3 py-1.5 bg-surface-container text-on-surface text-xs font-semibold rounded hover:bg-surface-container-high transition-colors"
+          >
+            Quay lại Dashboard
+          </button>
+        </div>
+      </div>
+
       <!-- Pipeline Steps -->
-      <div class="space-y-4">
+      <div v-else class="space-y-4">
         <!-- Step 1: Preparing pages -->
         <div class="flex items-start gap-4">
           <div
             class="mt-1 flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center transition-colors"
-            :class="step >= 1 ? 'bg-success text-on-primary' : 'border border-outline-variant bg-surface-container-low text-outline-variant'"
+            :class="currentStep >= 1 ? 'bg-success text-on-primary' : 'border border-outline-variant bg-surface-container-low text-outline-variant'"
           >
-            <span v-if="step >= 1" class="material-symbols-outlined text-sm font-bold">check</span>
+            <span v-if="currentStep >= 1" class="material-symbols-outlined text-sm font-bold">check</span>
             <span v-else class="material-symbols-outlined text-xs">hourglass_empty</span>
           </div>
           <div class="flex-1">
-            <p class="font-body-md text-sm font-medium" :class="step >= 1 ? 'text-on-surface' : 'text-on-surface-variant'">
-              Preparing pages
+            <p class="font-body-md text-sm font-medium" :class="currentStep >= 1 ? 'text-on-surface' : 'text-on-surface-variant'">
+              Chuẩn bị trang & Tiền xử lý ảnh (Deskew & CLAHE)
             </p>
-            <p class="font-label-sm text-xs font-semibold" :class="step >= 1 ? 'text-success' : 'text-outline'">
-              {{ step >= 1 ? 'Hoàn tất' : 'Chờ' }}
+            <p class="font-label-sm text-xs font-semibold" :class="currentStep >= 1 ? 'text-success' : 'text-outline'">
+              {{ currentStep >= 1 ? 'Hoàn tất' : 'Chờ' }}
             </p>
           </div>
         </div>
@@ -41,31 +61,31 @@
           <div
             class="mt-1 flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center transition-colors"
             :class="[
-              step > 2 ? 'bg-success text-on-primary' : '',
-              step === 2 ? 'border-2 border-primary bg-surface-container-lowest' : '',
-              step < 2 ? 'border border-outline-variant bg-surface-container-low text-outline-variant' : ''
+              currentStep > 2 ? 'bg-success text-on-primary' : '',
+              currentStep === 2 ? 'border-2 border-primary bg-surface-container-lowest' : '',
+              currentStep < 2 ? 'border border-outline-variant bg-surface-container-low text-outline-variant' : ''
             ]"
           >
-            <span v-if="step > 2" class="material-symbols-outlined text-sm font-bold">check</span>
-            <div v-else-if="step === 2" class="w-2 h-2 rounded-full bg-primary animate-pulse"></div>
+            <span v-if="currentStep > 2" class="material-symbols-outlined text-sm font-bold">check</span>
+            <div v-else-if="currentStep === 2" class="w-2 h-2 rounded-full bg-primary animate-pulse"></div>
             <span v-else class="material-symbols-outlined text-xs">hourglass_empty</span>
           </div>
           <div class="flex-1">
             <div class="flex justify-between items-center mb-1">
-              <p class="font-body-md text-sm font-medium" :class="step >= 2 ? 'text-primary' : 'text-on-surface-variant'">
-                Recognizing score
+              <p class="font-body-md text-sm font-medium" :class="currentStep >= 2 ? 'text-primary' : 'text-on-surface-variant'">
+                Nhận diện cấu trúc khuông & nốt nhạc (OMR Engine)
               </p>
-              <span v-if="step === 2" class="font-mono-label text-xs text-primary font-semibold">{{ scoreProgress }}%</span>
-              <span v-else-if="step > 2" class="font-label-sm text-xs text-success font-semibold">Hoàn tất</span>
+              <span v-if="currentStep === 2" class="font-mono-label text-xs text-primary font-semibold">{{ currentProgress }}%</span>
+              <span v-else-if="currentStep > 2" class="font-label-sm text-xs text-success font-semibold">Hoàn tất</span>
             </div>
-            <div v-if="step === 2" class="h-2 w-full bg-surface-container-high rounded-full overflow-hidden mb-1">
+            <div v-if="currentStep === 2" class="h-2 w-full bg-surface-container-high rounded-full overflow-hidden mb-1">
               <div
                 class="h-full bg-primary rounded-full progress-bar-stripes transition-all duration-300"
-                :style="{ width: scoreProgress + '%' }"
+                :style="{ width: currentProgress + '%' }"
               ></div>
             </div>
             <p class="font-label-sm text-xs text-on-surface-variant">
-              {{ step === 2 ? 'Đang phân tích cấu trúc khuông nhạc...' : (step > 2 ? 'Khuôn nhạc đã nhận dạng' : 'Chờ') }}
+              {{ currentStep === 2 ? 'Đang phân tích cao độ pixel và trường độ nốt...' : (currentStep > 2 ? 'Khuông nhạc đã nhận dạng' : 'Chờ') }}
             </p>
           </div>
         </div>
@@ -76,21 +96,21 @@
           <div
             class="mt-1 flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center transition-colors"
             :class="[
-              step > 3 ? 'bg-success text-on-primary' : '',
-              step === 3 ? 'border-2 border-primary bg-surface-container-lowest' : '',
-              step < 3 ? 'border border-outline-variant bg-surface-container-low text-outline-variant' : ''
+              currentStep > 3 ? 'bg-success text-on-primary' : '',
+              currentStep === 3 ? 'border-2 border-primary bg-surface-container-lowest' : '',
+              currentStep < 3 ? 'border border-outline-variant bg-surface-container-low text-outline-variant' : ''
             ]"
           >
-            <span v-if="step > 3" class="material-symbols-outlined text-sm font-bold">check</span>
-            <div v-else-if="step === 3" class="w-2 h-2 rounded-full bg-primary animate-pulse"></div>
+            <span v-if="currentStep > 3" class="material-symbols-outlined text-sm font-bold">check</span>
+            <div v-else-if="currentStep === 3" class="w-2 h-2 rounded-full bg-primary animate-pulse"></div>
             <span v-else class="material-symbols-outlined text-xs">hourglass_empty</span>
           </div>
           <div class="flex-1">
-            <p class="font-body-md text-sm font-medium" :class="step === 3 ? 'text-primary' : (step > 3 ? 'text-on-surface' : 'text-on-surface-variant')">
-              Recognizing lyrics (OCR vie+eng)
+            <p class="font-body-md text-sm font-medium" :class="currentStep === 3 ? 'text-primary' : (currentStep > 3 ? 'text-on-surface' : 'text-on-surface-variant')">
+              Nhận diện Lời tiếng Việt & Hợp âm (OCR vie+eng)
             </p>
-            <p class="font-label-sm text-xs" :class="step > 3 ? 'text-success font-semibold' : (step === 3 ? 'text-primary font-semibold' : 'text-outline')">
-              {{ step > 3 ? 'Hoàn tất' : (step === 3 ? 'Đang bóc tách lời bài hát...' : 'Chờ') }}
+            <p class="font-label-sm text-xs" :class="currentStep > 3 ? 'text-success font-semibold' : (currentStep === 3 ? 'text-primary font-semibold' : 'text-outline')">
+              {{ currentStep > 3 ? 'Hoàn tất' : (currentStep === 3 ? 'Đang bóc tách âm tiết tiếng Việt...' : 'Chờ') }}
             </p>
           </div>
         </div>
@@ -101,21 +121,21 @@
           <div
             class="mt-1 flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center transition-colors"
             :class="[
-              step > 4 ? 'bg-success text-on-primary' : '',
-              step === 4 ? 'border-2 border-primary bg-surface-container-lowest' : '',
-              step < 4 ? 'border border-outline-variant bg-surface-container-low text-outline-variant' : ''
+              currentStep > 4 ? 'bg-success text-on-primary' : '',
+              currentStep === 4 ? 'border-2 border-primary bg-surface-container-lowest' : '',
+              currentStep < 4 ? 'border border-outline-variant bg-surface-container-low text-outline-variant' : ''
             ]"
           >
-            <span v-if="step > 4" class="material-symbols-outlined text-sm font-bold">check</span>
-            <div v-else-if="step === 4" class="w-2 h-2 rounded-full bg-primary animate-pulse"></div>
+            <span v-if="currentStep > 4" class="material-symbols-outlined text-sm font-bold">check</span>
+            <div v-else-if="currentStep === 4" class="w-2 h-2 rounded-full bg-primary animate-pulse"></div>
             <span v-else class="material-symbols-outlined text-xs">hourglass_empty</span>
           </div>
           <div class="flex-1">
-            <p class="font-body-md text-sm font-medium" :class="step === 4 ? 'text-primary' : (step > 4 ? 'text-on-surface' : 'text-on-surface-variant')">
-              Creating MusicXML
+            <p class="font-body-md text-sm font-medium" :class="currentStep === 4 ? 'text-primary' : (currentStep > 4 ? 'text-on-surface' : 'text-on-surface-variant')">
+              Hợp nhất MusicXML & Cân bằng phách (music21 Auto-Healer)
             </p>
-            <p class="font-label-sm text-xs" :class="step > 4 ? 'text-success font-semibold' : (step === 4 ? 'text-primary font-semibold' : 'text-outline')">
-              {{ step > 4 ? 'Hoàn tất' : (step === 4 ? 'Đang hợp nhất DOM MusicXML...' : 'Chờ') }}
+            <p class="font-label-sm text-xs" :class="currentStep > 4 ? 'text-success font-semibold' : (currentStep === 4 ? 'text-primary font-semibold' : 'text-outline')">
+              {{ currentStep > 4 ? 'Hoàn tất' : (currentStep === 4 ? 'Đang cân bằng nhịp và quantize...' : 'Chờ') }}
             </p>
           </div>
         </div>
@@ -126,25 +146,25 @@
           <div
             class="mt-1 flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center transition-colors"
             :class="[
-              step >= 5 ? 'bg-success text-on-primary' : 'border border-outline-variant bg-surface-container-low text-outline-variant'
+              currentStep >= 5 ? 'bg-success text-on-primary' : 'border border-outline-variant bg-surface-container-low text-outline-variant'
             ]"
           >
-            <span v-if="step >= 5" class="material-symbols-outlined text-sm font-bold">check</span>
+            <span v-if="currentStep >= 5" class="material-symbols-outlined text-sm font-bold">check</span>
             <span v-else class="material-symbols-outlined text-xs">hourglass_empty</span>
           </div>
           <div class="flex-1">
-            <p class="font-body-md text-sm font-medium" :class="step >= 5 ? 'text-on-surface' : 'text-on-surface-variant'">
-              Validating & Finalizing
+            <p class="font-body-md text-sm font-medium" :class="currentStep >= 5 ? 'text-on-surface' : 'text-on-surface-variant'">
+              Kiểm định cú pháp & Chuẩn bị giao diện
             </p>
-            <p class="font-label-sm text-xs" :class="step >= 5 ? 'text-success font-semibold' : 'text-outline'">
-              {{ step >= 5 ? 'Sẵn sàng mở Editor' : 'Chờ' }}
+            <p class="font-label-sm text-xs" :class="currentStep >= 5 ? 'text-success font-semibold' : 'text-outline'">
+              {{ currentStep >= 5 ? 'Sẵn sàng mở Editor' : 'Chờ' }}
             </p>
           </div>
         </div>
       </div>
 
       <!-- Cancel Action -->
-      <div class="mt-8 pt-6 border-t border-border-subtle text-center">
+      <div v-if="!errorMessage" class="mt-8 pt-6 border-t border-border-subtle text-center">
         <button
           @click="$emit('cancel')"
           class="font-label-sm text-sm text-secondary hover:text-error hover:bg-error-container/20 transition-colors px-4 py-2 rounded-md"
@@ -157,42 +177,24 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { computed } from 'vue';
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   fileName: string;
-}>();
+  step?: number;
+  progress?: number;
+  errorMessage?: string | null;
+}>(), {
+  step: 2,
+  progress: 40,
+  errorMessage: null,
+});
 
-const emit = defineEmits<{
+defineEmits<{
   (e: 'completed'): void;
   (e: 'cancel'): void;
 }>();
 
-const step = ref(1);
-const scoreProgress = ref(20);
-
-onMounted(() => {
-  // Simulate dynamic pipeline progress
-  setTimeout(() => {
-    step.value = 2;
-    const interval = setInterval(() => {
-      if (scoreProgress.value < 90) {
-        scoreProgress.value += Math.floor(Math.random() * 15) + 5;
-        if (scoreProgress.value > 90) scoreProgress.value = 90;
-      } else {
-        clearInterval(interval);
-        step.value = 3;
-        setTimeout(() => {
-          step.value = 4;
-          setTimeout(() => {
-            step.value = 5;
-            setTimeout(() => {
-              emit('completed');
-            }, 600);
-          }, 700);
-        }, 700);
-      }
-    }, 300);
-  }, 500);
-});
+const currentStep = computed(() => props.step);
+const currentProgress = computed(() => props.progress);
 </script>

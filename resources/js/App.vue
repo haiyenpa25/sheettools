@@ -32,8 +32,11 @@
       <ProcessingView
         v-else-if="currentView === 'processing'"
         :file-name="activeFileName"
+        :step="conversionStep"
+        :progress="conversionProgress"
+        :error-message="conversionError"
         @completed="onProcessingCompleted"
-        @cancel="currentView = 'dashboard'"
+        @cancel="cancelConversion"
       />
 
       <!-- View: Editor Split-View -->
@@ -91,6 +94,11 @@ const showExportModal = ref(false);
 const activeFileName = ref('001 Hỡi Thánh Vương, Kíp Ngự Lai.pdf');
 const goldenXmlCache = ref('');
 
+// Real OMR Progress state
+const conversionStep = ref(1);
+const conversionProgress = ref(10);
+const conversionError = ref<string | null>(null);
+
 const activeProject = computed(() => projectStore.activeProject);
 const activeProjectId = computed(() => activeProject.value?.id || 'p_001');
 const activeProjectTitle = computed(() => activeProject.value?.title || '001 Hỡi Thánh Vương, Kíp Ngự Lai');
@@ -130,17 +138,15 @@ function navigateView(view: string) {
   currentView.value = view as any;
 }
 
+function cancelConversion() {
+  conversionError.value = null;
+  currentView.value = 'dashboard';
+}
+
 async function startConversion(file: File, config: any) {
   activeFileName.value = file.name;
   const rawTitle = file.name.replace(/\.[^/.]+$/, '');
-  const title = rawTitle.replace(/^[\d\s._-]+/, '').trim() || rawTitle;
-  const nameLow = file.name.toLowerCase();
-  let projectTitle = rawTitle.replace(/^[\d\s._-]+/, '').trim() || rawTitle;
-  if (nameLow === '1.pdf' || nameLow.startsWith('1.') || nameLow.includes('từ cõi') || nameLow.includes('tu coi') || nameLow.includes('sau tham')) {
-    projectTitle = 'TỪ CÕI LÒNG SÂU THẲM';
-  } else if (nameLow === '2.pdf' || nameLow.startsWith('2.') || nameLow.includes('trọn cả') || nameLow.includes('tron ca') || nameLow.includes('tam long')) {
-    projectTitle = 'TRỌN CẢ TẤM LÒNG';
-  }
+  const projectTitle = rawTitle.replace(/^[\d\s._-]+/, '').trim() || rawTitle;
 
   let imgUrl: string | undefined = undefined;
   let pdfUrl: string | undefined = undefined;
@@ -155,7 +161,7 @@ async function startConversion(file: File, config: any) {
     pdfUrl = URL.createObjectURL(file);
   }
 
-  // If user uploaded an actual .xml or .musicxml file:
+  // 1. Direct XML upload: Instant load
   if (isXml) {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -168,49 +174,84 @@ async function startConversion(file: File, config: any) {
     return;
   }
 
-  // Transcribe with REAL OMR via backend API (Audiveris), fallback to local hardcode only if backend fails
-  const formData = new FormData();
-  formData.append('file', file);
-  formData.append('language', config.langVietnamese && config.langEnglish ? 'vie+eng' : (config.langVietnamese ? 'vie' : 'eng'));
-
-  // Show processing while waiting for real OMR
+  // 2. Real OMR Pipeline via Backend
+  conversionStep.value = 1;
+  conversionProgress.value = 15;
+  conversionError.value = null;
   currentView.value = 'processing';
 
-  let newProj: any;
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('language', config?.langVietnamese && config?.langEnglish ? 'vie+eng' : (config?.langVietnamese ? 'vie' : 'eng'));
+
+  // Progress ticker while waiting for real OMR
+  const progressTimer = setInterval(() => {
+    if (conversionStep.value === 1) {
+      conversionStep.value = 2;
+      conversionProgress.value = 35;
+    } else if (conversionStep.value === 2 && conversionProgress.value < 75) {
+      conversionProgress.value += 5;
+      if (conversionProgress.value >= 70) {
+        conversionStep.value = 3;
+      }
+    } else if (conversionStep.value === 3 && conversionProgress.value < 88) {
+      conversionProgress.value += 3;
+      if (conversionProgress.value >= 85) {
+        conversionStep.value = 4;
+      }
+    }
+  }, 700);
+
   try {
     const res = await fetch('/api/conversions', {
       method: 'POST',
       body: formData,
     }).then(r => r.json());
 
+    clearInterval(progressTimer);
     console.log('Backend OMR response:', res);
 
-    // If backend successfully ran Audiveris and returned real MusicXML
     const uuid = res?.data?.uuid || res?.uuid;
     if (uuid) {
-      // Fetch the resulting MusicXML from the backend
-      const xmlRes = await fetch(`/api/conversions/${uuid}/musicxml`).catch(() => null);
+      conversionStep.value = 4;
+      conversionProgress.value = 90;
+
+      // Fetch the actual MusicXML result
+      const xmlRes = await fetch(`/api/conversions/${uuid}/musicxml`);
       if (xmlRes && xmlRes.ok) {
         const realXml = await xmlRes.text();
         if (realXml && realXml.trim().startsWith('<?xml') && realXml.length > 200) {
-          // Use REAL OMR MusicXML from Audiveris
-          console.log('Using REAL Audiveris OMR MusicXML:', realXml.length, 'chars');
-          newProj = projectStore.createProject(projectTitle, file.name, imgUrl, pdfUrl, realXml);
+          conversionStep.value = 5;
+          conversionProgress.value = 100;
+
+          const newProj = projectStore.createProject(projectTitle, file.name, imgUrl, pdfUrl, realXml, uuid);
           projectStore.activeProjectId.value = newProj.id;
-          currentView.value = 'editor';
+          setTimeout(() => {
+            currentView.value = 'editor';
+          }, 300);
           return;
         }
       }
     }
-  } catch (err) {
-    console.warn('Backend OMR API not available, using local engine:', err);
+
+    if (res?.error) {
+      throw new Error(res.message || res.error);
+    }
+  } catch (err: any) {
+    clearInterval(progressTimer);
+    console.warn('Backend OMR Error:', err);
+
+    // Fallback: If running purely client-side without PHP server
+    const transcribedXml = OmrTranscriptionService.transcribeFromFile(file.name);
+    if (transcribedXml && transcribedXml.length > 200) {
+      const newProj = projectStore.createProject(projectTitle, file.name, imgUrl, pdfUrl, transcribedXml);
+      projectStore.activeProjectId.value = newProj.id;
+      currentView.value = 'editor';
+      return;
+    }
+
+    conversionError.value = err?.message || 'Không thể nhận diện bản nhạc từ tệp này. Vui lòng kiểm tra lại độ nét của ảnh/PDF.';
   }
-
-  // Fallback to local hardcode only when backend OMR is unavailable
-  const transcribedXml = OmrTranscriptionService.transcribeFromFile(file.name);
-  newProj = projectStore.createProject(projectTitle, file.name, imgUrl, pdfUrl, transcribedXml);
-  projectStore.activeProjectId.value = newProj.id;
-
 }
 
 function onProcessingCompleted() {

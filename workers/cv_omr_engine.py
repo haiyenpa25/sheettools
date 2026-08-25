@@ -665,18 +665,38 @@ class ComputerVisionOmrEngine:
             word_cx = left_margin + data['left'][i] + data['width'][i] / 2.0
             lines_words.setdefault(line_num, []).append((word_cx, text))
 
-        # Gán lời từng verse vào nốt nhạc gần nhất
+        # Làm sạch và chuẩn hóa lỗi OCR tiếng Việt phổ biến
+        def clean_vietnamese_ocr(txt: str) -> str:
+            replacements = {
+                'cﬁi': 'cõi', 'cﬂi': 'cõi', 'Ibng': 'lòng', 'lﬂng': 'lòng',
+                'sﬁu': 'sâu', 'thﬁm': 'thẳm', 'd6': 'độ', 'ngﬂi': 'ngài',
+                'chﬁa': 'chúa', 'thﬁnh': 'thánh', 'vﬁơng': 'vương',
+                'cﬂng': 'cũng', 'ngﬂn': 'ngàn', 'trﬂn': 'trọn',
+                'tﬁm': 'tấm', 'tﬂm': 'tấm', '|': '', '_': '',
+            }
+            for wrong, right in replacements.items():
+                if txt.lower() == wrong:
+                    return right.upper() if txt.isupper() else right
+            return txt
+
+        # Gán lời từng verse vào nốt nhạc theo thứ tự không gian ngang
         for verse_idx, (_, words) in enumerate(sorted(lines_words.items())):
-            for word_cx, word_text in words:
+            words.sort(key=lambda w: w[0])
+            cleaned_words = [(wx, clean_vietnamese_ocr(wt)) for wx, wt in words if len(wt) > 0]
+            
+            # Gán từng từ vào nốt nhạc tương ứng theo tọa độ X
+            for word_cx, word_text in cleaned_words:
                 if not noteheads:
                     continue
-                closest = min(noteheads, key=lambda n: abs(n['cx'] - word_cx))
+                # Tìm nốt chưa có lyric của verse này và có khoảng cách X gần nhất
+                candidates = [n for n in noteheads if f'lyric_{verse_idx}' not in n]
+                if not candidates:
+                    candidates = noteheads
+                closest = min(candidates, key=lambda n: abs(n['cx'] - word_cx))
                 if abs(closest['cx'] - word_cx) <= tolerance_x:
                     lyric_key = f'lyric_{verse_idx}'
-                    if lyric_key not in closest:
-                        closest[lyric_key] = word_text
-                    # Verse 0 cũng ghi vào 'lyric' để tương thích ngược
-                    if verse_idx == 0 and 'lyric' not in closest:
+                    closest[lyric_key] = word_text
+                    if verse_idx == 0:
                         closest['lyric'] = word_text
 
     # ════════════════════════════════════════════════════════════

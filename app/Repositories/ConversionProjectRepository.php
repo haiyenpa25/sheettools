@@ -68,6 +68,28 @@ class ConversionProjectRepository
         return $projects;
     }
 
+    public function delete(string $uuid): bool
+    {
+        $dir = $this->storageService->getProjectDir($uuid);
+        if (!is_dir($dir)) {
+            return false;
+        }
+
+        $this->deleteDirectoryRecursively($dir);
+        return !is_dir($dir);
+    }
+
+    protected function deleteDirectoryRecursively(string $dir): void
+    {
+        if (!is_dir($dir)) return;
+        $files = array_diff(scandir($dir) ?: [], ['.', '..']);
+        foreach ($files as $file) {
+            $path = $dir . DIRECTORY_SEPARATOR . $file;
+            is_dir($path) ? $this->deleteDirectoryRecursively($path) : @unlink($path);
+        }
+        @rmdir($dir);
+    }
+
     protected function getMetaPath(string $uuid): string
     {
         return $this->storageService->getProjectDir($uuid) . DIRECTORY_SEPARATOR . 'project.json';
