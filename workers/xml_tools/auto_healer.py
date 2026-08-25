@@ -39,6 +39,10 @@ def heal_musicxml(input_xml_path: str, output_xml_path: str = None) -> bool:
             expected_ql = main_ts.barDuration.quarterLength
 
             measures = list(part.getElementsByClass('Measure'))
+            if measures:
+                # Nếu chưa có TimeSignature, chèn TimeSignature vào ô nhịp đầu tiên
+                if not ts_list:
+                    measures[0].insert(0, main_ts)
             for m in measures:
                 # Loại bỏ các nốt hoặc chord có duration <= 0 (ghost elements)
                 to_remove = []

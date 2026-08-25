@@ -47,12 +47,31 @@ def validate_musicxml(xml_path: str) -> dict:
 
         result["metadata"]["partsCount"] = len(score.parts)
         
+        # Trích xuất TimeSignature chính
+        main_ts = None
+        for p in score.parts:
+            for el in p.recurse().getElementsByClass('TimeSignature'):
+                main_ts = el
+                break
+            if main_ts:
+                break
+        
+        if not main_ts:
+            try:
+                import xml.etree.ElementTree as ET
+                root = ET.parse(xml_path).getroot()
+                beats = root.find('.//time/beats')
+                beat_type = root.find('.//time/beat-type')
+                if beats is not None and beat_type is not None:
+                    main_ts = meter.TimeSignature(f"{beats.text.strip()}/{beat_type.text.strip()}")
+            except Exception:
+                pass
+
         # Kiểm tra measures và time signatures
         for i, part in enumerate(score.parts):
             measures = part.getElementsByClass('Measure')
             for m in measures:
-                # Kiểm tra measure duration có vượt quá time signature không
-                ts = m.timeSignature or part.getTimeSignatures()[0] if part.getTimeSignatures() else None
+                ts = m.timeSignature or main_ts
                 if ts:
                     total_duration = sum([n.quarterLength for n in m.notesAndRests])
                     expected_quarter_length = ts.barDuration.quarterLength
