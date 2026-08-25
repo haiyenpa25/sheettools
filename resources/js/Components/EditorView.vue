@@ -1913,6 +1913,9 @@ function saveMetadata() {
 
 // Audio Playback
 function toggleAudio() {
+  if (xmlEngine) {
+    audioPlayer.loadFromXmlEngine(xmlEngine);
+  }
   audioPlayer.toggle();
 }
 

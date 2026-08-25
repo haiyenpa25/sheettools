@@ -329,4 +329,48 @@ export class AudioPlaybackEngine {
       osc.stop(this.ctx!.currentTime + duration);
     });
   }
+
+  /**
+   * Nạp động toàn bộ nốt nhạc và hợp âm từ MusicXmlEngine đang mở
+   */
+  public loadFromXmlEngine(xmlEngine: any): void {
+    if (!xmlEngine) return;
+    const notesSeq: NoteEvent[] = [];
+    const harmonySeq: HarmonyEvent[] = [];
+
+    const harmonies = xmlEngine.extractHarmonies() || [];
+    harmonies.forEach((h: any) => {
+      const freqs = this.chordToFreqs(h.rootStep, h.kindText, h.bassStep);
+      harmonySeq.push({
+        measureNumber: h.measureNumber,
+        chordName: h.displayText,
+        frequencies: freqs,
+      });
+    });
+
+    for (let m = 1; m <= 32; m++) {
+      const mNotes = xmlEngine.extractMeasureNotes(m) || [];
+      if (mNotes.length === 0) continue;
+
+      mNotes.forEach((n: any) => {
+        if (!n.isRest && n.step) {
+          const alterVal = n.accidental === 'sharp' ? 1 : (n.accidental === 'flat' ? -1 : 0);
+          const freq = this.pitchToFreq(n.step, n.octave, alterVal);
+          const beats = n.duration === 'whole' ? 4 : (n.duration === 'half' ? 2 : (n.duration === 'quarter' ? 1 : 0.5));
+          notesSeq.push({
+            measureNumber: m,
+            pitch: `${n.step}${n.accidental === 'sharp' ? '#' : (n.accidental === 'flat' ? 'b' : '')}${n.octave}`,
+            durationBeats: beats,
+            frequency: freq,
+          });
+        }
+      });
+    }
+
+    if (notesSeq.length > 0) {
+      this.noteSequence = notesSeq;
+      this.harmonySequence = harmonySeq;
+      this.currentStepIndex = 0;
+    }
+  }
 }
