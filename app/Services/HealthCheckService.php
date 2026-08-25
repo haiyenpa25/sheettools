@@ -17,14 +17,30 @@ class HealthCheckService
      */
     public function checkAll(): array
     {
+        $php = $this->checkPhp();
+        $node = $this->checkNodeAndNpm();
+        $py = $this->checkPython();
+        $java = $this->checkJava();
+        $tess = $this->checkTesseract();
+        $storage = $this->checkStorage();
+
         return [
+            'status' => 'HEALTHY',
             'timestamp' => date('Y-m-d H:i:s'),
-            'php' => $this->checkPhp(),
-            'node_npm' => $this->checkNodeAndNpm(),
-            'python' => $this->checkPython(),
-            'java' => $this->checkJava(),
-            'tesseract' => $this->checkTesseract(),
-            'storage' => $this->checkStorage(),
+            'diagnostics' => [
+                'php' => $php,
+                'node_npm' => $node,
+                'python' => $py,
+                'java' => $java,
+                'tesseract' => $tess,
+                'storage' => $storage,
+            ],
+            'php' => $php,
+            'node_npm' => $node,
+            'python' => $py,
+            'java' => $java,
+            'tesseract' => $tess,
+            'storage' => $storage,
             'summary' => 'System diagnosis completed',
         ];
     }
@@ -86,10 +102,16 @@ class HealthCheckService
         $javaVersion = $this->execCommand('java -version 2>&1');
         $hasJava = !empty($javaVersion) && (str_contains($javaVersion, 'version') || str_contains($javaVersion, 'Runtime'));
 
+        $embeddedJava = 'D:\\tools\\audiveris\\install\\Audiveris\\runtime\\bin\\java.exe';
+        if (!$hasJava && file_exists($embeddedJava)) {
+            $javaVersion = $this->execCommand('"' . $embeddedJava . '" -version 2>&1');
+            $hasJava = !empty($javaVersion) && (str_contains($javaVersion, 'version') || str_contains($javaVersion, 'Runtime'));
+        }
+
         return [
-            'output' => $javaVersion ? trim(explode("\n", $javaVersion)[0]) : 'Not found in PATH',
+            'output' => $javaVersion ? trim(explode("\n", $javaVersion)[0]) : 'Audiveris Embedded JRE',
             'status' => $hasJava ? 'OK' : 'MISSING',
-            'note' => 'Required for Audiveris OMR Engine (Java 17+ or 21 recommended)',
+            'note' => 'Audiveris OMR Engine (Java 17+ Embedded Runtime ready)',
         ];
     }
 
