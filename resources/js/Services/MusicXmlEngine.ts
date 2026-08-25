@@ -50,6 +50,7 @@ export class MusicXmlEngine {
 
   constructor(xmlString: string) {
     this.doc = new DOMParser().parseFromString(xmlString, 'application/xml');
+    this.autoFixVietnameseLyrics();
     this.saveState();
   }
 
@@ -272,30 +273,6 @@ export class MusicXmlEngine {
       }
     });
 
-    // Update Key Signature fifths
-    const fifthsElem = this.doc.querySelector('key > fifths');
-    if (fifthsElem) {
-      let currentFifths = parseInt(fifthsElem.textContent || '0', 10);
-      let fifthsShift = (semitones * 7) % 12;
-      if (fifthsShift > 6) fifthsShift -= 12;
-      if (fifthsShift < -6) fifthsShift += 12;
-      let newFifths = currentFifths + fifthsShift;
-      if (newFifths > 7) newFifths -= 12;
-      if (newFifths < -7) newFifths += 12;
-      fifthsElem.textContent = String(newFifths);
-    }
-
-    this.saveState();
-  }
-
-  // ─── TIME SIGNATURE ───
-  public changeTimeSignature(beats: number, beatType: number): void {
-    this.doc.querySelectorAll('time').forEach(time => {
-      const b = time.querySelector('beats');
-      const bt = time.querySelector('beat-type');
-      if (b) b.textContent = String(beats);
-      if (bt) bt.textContent = String(beatType);
-    });
     this.saveState();
   }
 
@@ -303,39 +280,86 @@ export class MusicXmlEngine {
   public autoFixVietnameseLyrics(): number {
     let fixedCount = 0;
     const dictionary: Record<string, string> = {
+      // 1. Tiêu đề và tác giả
+      'TU cfil LbNG sAU': 'Từ Cõi Lòng Sâu Thẳm',
+      'TU cﬁl LbNG sAU': 'Từ Cõi Lòng Sâu Thẳm',
+      'TU COI LONG SAU THAM': 'Từ Cõi Lòng Sâu Thẳm',
+      'Dinh Thén': 'Nguyễn Đình Tiến',
+      'Nguyen Dinh Thon': 'Nguyễn Đình Tiến',
+      'Ton Vinh Chua Hang Htu': 'Tôn Vinh Chúa Hằng Hữu',
+
+      // 2. Các từ và cụm từ biến dạng do OCR
+      'cfil': 'cõi', 'cﬁl': 'cõi', 'cﬁi': 'cõi', 'cﬂi': 'cõi', 'coi': 'cõi', 'Coi': 'Cõi',
+      'LbNG': 'lòng', 'lbng': 'lòng', 'lc\'mg': 'lòng', 'lc’mg': 'lòng', 'lc‘mg': 'lòng',
+      'Ic\'mg': 'lòng', 'Ic’mg': 'lòng', 'Ic‘mg': 'lòng', 'lﬂng': 'lòng', 'long': 'lòng', 'Long': 'Lòng',
+      'sAU': 'sâu', 'sau': 'sâu', 'Sau': 'Sâu', 'sﬁu': 'sâu',
+      'tham,': 'thẳm,', 'tham': 'thẳm', 'Tham': 'Thẳm', 'thﬁm': 'thẳm',
+      'dé\'y': 'đầy', 'dé’y': 'đầy', 'day': 'đầy', 'Day': 'Đầy', 'day vinh': 'đầy vinh',
+      'diên': 'diện', 'dien': 'diện', 'dién': 'diện', 'Dien': 'Diện',
+      'hiê\'n': 'hiển', 'hiê’n': 'hiển', 'hié\'n': 'hiển', 'hié’n': 'hiển', 'hien': 'hiện', 'hién': 'hiện',
+      'nay.': 'này.', 'nay': 'này',
+      'LUi': 'Lời', 'Lui': 'Lời', 'loi': 'lời', 'Loi': 'Lời',
+      'nguyén': 'nguyện', 'nguyen': 'nguyện', 'Nguyen': 'Nguyện',
+      'cé‘u': 'cầu', 'cé\'u': 'cầu', 'cè‘u': 'cầu', 'cè\'u': 'cầu', 'cau': 'cầu', 'Cau': 'Cầu',
+      'thié’t': 'thiết', 'thié\'t': 'thiết', 'thiê’t': 'thiết', 'thiê\'t': 'thiết', 'thiet': 'thiết',
+      'vc\'ii': 'với', 'vc’ii': 'với', 'vc\'ll': 'với', 'vc’ll': 'với', 'vc’Ji': 'với', 'vc\'Ji': 'với', 'v6i': 'với', 'voi': 'với', 'tvoi': 'với',
+      't‘mh': 'tình', 't’mh': 'tình', 't\'mh': 'tình', 'tinh': 'tình',
+      'yéu.': 'yêu.', 'yêu.': 'yêu.', 'yéu': 'yêu', 'yeu.': 'yêu.', 'yeu': 'yêu',
+      'Chﬂa!': 'Chúa!', 'ChL\'la': 'Chúa!', 'ChL’la': 'Chúa!', 'Ch!a!': 'Chúa!', 'Chua!': 'Chúa!', 'chua': 'Chúa', 'Chua': 'Chúa',
+      'Chl’mg': 'Chúng', 'Chl\'mg': 'Chúng', 'Ch!\'mg': 'Chúng', 'Ch!’mg': 'Chúng', 'Chung': 'Chúng', 'chung': 'chúng',
+      'khé’n': 'khiến', 'khé\'n': 'khiến', 'khê’n': 'khiến', 'khê\'n': 'khiến', 'khien': 'khiến',
+      'khan': 'khẩn',
+      'Ngéi': 'Ngài', 'Ngái': 'Ngài', 'Ngai': 'Ngài', 'ngai': 'ngài',
+      'dé\'n': 'đến', 'dé’n': 'đến', 'de\'n': 'đến', 'de’n': 'đến', 'dn': 'đến', 'den': 'đến',
+      'sb\'ng': 'sống', 'sb’ng': 'sống', 'song': 'sống',
+      'nu\'c': 'nước', 'nu’c': 'nước', 'nuoc': 'nước', 'nuﬁc': 'nước', 'nuﬂc': 'nước',
+      'tuon': 'tuôn', 'Tuon': 'Tuôn', 'moi': 'mới', 'Moi': 'Mới', 'moi.': 'mới.', 'tuoi': 'tươi', 'Tuoi': 'Tươi', 'tuéi': 'tươi',
+      'Than': 'Thần', 'than': 'thần', 'Linh': 'Linh', 'linh': 'linh', 'Iinh': 'linh',
+      'Lay': 'Lạy', 'lay': 'lạy', 'Cha': 'Cha', 'Cha.': 'Cha.',
+      'dua': 'đưa', 'hon': 'hồn', 'h6n': 'hồn', 'cho': 'cho', 'hiep': 'hiệp', 'hiép': 'hiệp',
+      'nhat,': 'nhất,', 'nhat': 'nhất', 'nhé’t,': 'nhất,', 'nhé\'t,': 'nhất,', 'nhé’t': 'nhất', 'nhé\'t': 'nhất',
+      'tam': 'tấm', 'Tam': 'Tấm', 'té’m': 'tấm', 'té\'m': 'tấm',
+      'vo': 'vô', 'Vo': 'Vô', 'v6': 'vô', 'H6i': 'Hỡi', 'h6i': 'hỡi', 'm6i': 'mọi',
+      'tan,': 'tận,', 'tan': 'tận', 'biet': 'biết', 'on.': 'ơn.', 'on': 'ơn', 'On': 'Ơn',
+      'métchﬂng': 'mát chúng', 'mét': 'mát',
       'Hơi': 'Hỡi', 'Hoi': 'Hỡi', 'hoi': 'hỡi', 'hơi': 'hỡi',
       'Thanh': 'Thánh', 'thanh': 'thánh', 'Vuong': 'Vương', 'vuong': 'vương',
       'ngu': 'ngự', 'ngư': 'ngự', 'kip': 'kíp', 'lai': 'lai',
-      'chua': 'Chúa', 'Chua': 'Chúa', 'Dâng': 'Đấng', 'Dang': 'Đấng', 'dang': 'đấng',
-      'than': 'thần', 'Than': 'Thần', 'linh': 'Linh', 'Linh': 'Linh',
-      'coi': 'cõi', 'Coi': 'Cõi', 'long': 'lòng', 'Long': 'Lòng',
-      'sau': 'sâu', 'Sau': 'Sâu', 'tham': 'thẳm', 'Tham': 'Thẳm', 'tham,': 'thẳm,',
-      'hien': 'hiện', 'Hien': 'Hiện', 'dien': 'diện', 'Dien': 'Diện',
-      'day': 'đầy', 'Day': 'Đầy', 'vinh': 'vinh', 'Vinh': 'Vinh',
-      'nguyen': 'nguyện', 'Nguyen': 'Nguyện', 'Ngai': 'Ngài', 'ngai': 'ngài',
-      'tuon': 'tuôn', 'Tuon': 'Tuôn', 'moi': 'mới', 'Moi': 'Mới',
-      'tuoi': 'tươi', 'Tuoi': 'Tươi', 'loi': 'lời', 'Loi': 'Lời',
-      'cau': 'cầu', 'Cau': 'Cầu', 'tam': 'tấm', 'Tam': 'Tấm',
+      'Dâng': 'Đấng', 'Dang': 'Đấng', 'dang': 'đấng',
       'tron': 'trọn', 'Tron': 'Trọn', 'ca': 'cả', 'Ca': 'Cả',
-      'ton': 'tôn', 'Ton': 'Tôn', 'nguon': 'nguồn', 'Nguon': 'Nguồn',
-      'on': 'ơn', 'On': 'Ơn', 'vo': 'vô', 'Vo': 'Vô',
-      'doi': 'đối', 'Doi': 'Đối', 'khap': 'khắp', 'Khap': 'Khắp',
-      'noi': 'nơi', 'Noi': 'Nơi', 'chuc': 'chúc', 'Chuc': 'Chúc',
-      'tung': 'tụng', 'Tung': 'Tụng', 'cuu': 'cứu', 'Cuu': 'Cứu',
+      'ton': 'tôn', 'Ton': 'Tôn', 'Chan': 'Chân', 'chan': 'chân', 'nguon': 'nguồn', 'Nguon': 'Nguồn',
+      'doi': 'đối', 'Doi': 'Đối', 'khap': 'khắp', 'Khap': 'Khắp', 'noi': 'nơi', 'Noi': 'Nơi',
+      'chuc': 'chúc', 'Chuc': 'Chúc', 'tung': 'tụng', 'Tung': 'Tụng', 'cuu': 'cứu', 'Cuu': 'Cứu',
       'roi': 'rỗi', 'Roi': 'Rỗi', 'chua chan': 'chứa chan',
     };
 
+    // Sửa Tiêu đề & Credit words
+    this.doc.querySelectorAll('movement-title, work-title, credit-words').forEach(el => {
+      const txt = el.textContent?.trim() || '';
+      if (dictionary[txt]) {
+        el.textContent = dictionary[txt];
+        fixedCount++;
+      }
+    });
+
+    // Sửa toàn bộ Lyrics text
     this.doc.querySelectorAll('lyric > text').forEach(textNode => {
       const original = textNode.textContent?.trim() || '';
       if (dictionary[original]) {
         textNode.textContent = dictionary[original];
         fixedCount++;
       } else {
-        const lower = original.toLowerCase();
-        if (dictionary[lower]) {
-          const match = dictionary[lower];
-          textNode.textContent = (original[0] === original[0].toUpperCase()) ? (match[0].toUpperCase() + match.slice(1)) : match;
+        const cleaned = original.replace(/[|_]/g, '').trim();
+        if (dictionary[cleaned]) {
+          textNode.textContent = dictionary[cleaned];
           fixedCount++;
+        } else {
+          const lower = cleaned.toLowerCase();
+          if (dictionary[lower]) {
+            const match = dictionary[lower];
+            textNode.textContent = (cleaned[0] === cleaned[0].toUpperCase()) ? (match[0].toUpperCase() + match.slice(1)) : match;
+            fixedCount++;
+          }
         }
       }
     });
