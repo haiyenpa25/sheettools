@@ -387,7 +387,7 @@ class VietnameseUniversalOcrEngine:
                 if b['h'] >= max_h * 0.65 and (0.15 * w <= b['cx'] <= 0.85 * w):
                     title_items.append(b)
 
-        title_items = sorted(title_items, key=lambda x: x['cy'])
+        title_items = sorted(title_items, key=lambda x: (round(x['cy'] / 40.0), x['cx']))
         title = self.clean_syllable(' '.join(it['text'] for it in title_items)) if title_items else ""
 
         title_ids = set(id(it) for it in title_items)
@@ -427,18 +427,42 @@ class VietnameseUniversalOcrEngine:
                         ly = int(round(line_y))
                         cv2.line(pure_notation_img, (rx1, ly), (rx2, ly), staff_line_color, 2, cv2.LINE_AA)
 
-        # ─── BÓC TÁCH ZONE 3: LỜI ĐƯỢC PHÂN THEO KHUÔNG VÀ CỘT NỐT ───
+        # ─── BÓC TÁCH ZONE 3: LỜI ĐƯỢC PHÂN TÁCH ĐA VERSE (VERSE 1 & VERSE 2) THEO DÒNG Y ───
         all_lyrics_flat = []
         for s_idx, items in lyric_boxes_by_staff.items():
-            items_sorted = sorted(items, key=lambda x: x['cx'])
-            for it in items_sorted:
-                all_lyrics_flat.append({
-                    'staff_index': s_idx,
-                    'text': it['text'],
-                    'x': it['cx'],
-                    'y': it['cy'],
-                    'box': it['box']
-                })
+            # Lọc bỏ ký hiệu hợp âm nếu còn sót
+            valid_lyric_items = [it for it in items if not is_probable_chord(it['text'])]
+            if not valid_lyric_items:
+                continue
+
+            # Phân tách các dòng Verse khác nhau dưới cùng 1 khuông theo tọa độ Y
+            items_by_y = sorted(valid_lyric_items, key=lambda x: x['cy'])
+            verse_lines = []
+            for it in items_by_y:
+                added = False
+                for v_line in verse_lines:
+                    avg_y = sum(x['cy'] for x in v_line) / len(v_line)
+                    if abs(it['cy'] - avg_y) < 28:  # Cùng 1 dòng chữ
+                        v_line.append(it)
+                        added = True
+                        break
+                if not added:
+                    verse_lines.append([it])
+
+            # Sắp xếp các dòng verse từ trên xuống dưới (Dòng trên = Verse 1, Dòng dưới = Verse 2)
+            verse_lines = sorted(verse_lines, key=lambda vl: sum(x['cy'] for x in vl) / len(vl))
+
+            for v_idx, vl in enumerate(verse_lines):
+                vl_sorted = sorted(vl, key=lambda x: x['cx'])
+                for it in vl_sorted:
+                    all_lyrics_flat.append({
+                        'staff_index': s_idx,
+                        'verse_number': v_idx + 1,
+                        'text': it['text'],
+                        'x': it['cx'],
+                        'y': it['cy'],
+                        'box': it['box']
+                    })
 
         return {
             'header': {
@@ -458,7 +482,7 @@ class VietnameseUniversalOcrEngine:
 
     def inject_3zone_metadata_and_lyrics(self, xml_path: str, decomp_meta: dict) -> bool:
         """
-        Gắn toàn diện Tiêu đề thật, Tác giả thật, Hợp âm và toàn bộ Lời tiếng Việt từ 3-Zone OCR vào MusicXML.
+        Gắn toàn diện Tiêu đề thật, Tác giả thật, Hợp âm và toàn bộ Lời tiếng Việt (Đa Verse) từ 3-Zone OCR vào MusicXML.
         """
         if not os.path.exists(xml_path) or not decomp_meta:
             return False
@@ -517,27 +541,34 @@ class VietnameseUniversalOcrEngine:
                 all_measure_notes.append(notes)
 
             # 4. Gắn toàn bộ Lời tiếng Việt từ 3-Zone OCR
-            # Xóa các thẻ lyric cũ (vốn chứa rác OCR tiếng Anh như l6i, dfii của Audiveris)
             for m in measures:
                 for n in m.findall('note'):
                     for lyr in n.findall('lyric'):
                         n.remove(lyr)
 
             flat_notes = [n for m_notes in all_measure_notes for n in m_notes]
-            flat_lyrics = [item['text'] for item in decomp_meta.get('lyrics', [])]
 
-            if flat_lyrics and flat_notes:
-                lyr_idx = 0
-                for note in flat_notes:
-                    if lyr_idx < len(flat_lyrics):
-                        text_val = flat_lyrics[lyr_idx].strip()
-                        if text_val:
-                            lyric_elem = ET.SubElement(note, 'lyric', {'number': '1'})
-                            syllabic_elem = ET.SubElement(lyric_elem, 'syllabic')
-                            syllabic_elem.text = 'single'
-                            text_elem = ET.SubElement(lyric_elem, 'text')
-                            text_elem.text = text_val
-                        lyr_idx += 1
+            v1_lyrics = [item['text'] for item in decomp_meta.get('lyrics', []) if item.get('verse_number', 1) == 1]
+            v2_lyrics = [item['text'] for item in decomp_meta.get('lyrics', []) if item.get('verse_number', 1) == 2]
+
+            v1_idx = 0
+            v2_idx = 0
+            for note in flat_notes:
+                if v1_idx < len(v1_lyrics):
+                    txt1 = v1_lyrics[v1_idx].strip()
+                    if txt1:
+                        lyr1 = ET.SubElement(note, 'lyric', {'number': '1'})
+                        ET.SubElement(lyr1, 'syllabic').text = 'single'
+                        ET.SubElement(lyr1, 'text').text = txt1
+                    v1_idx += 1
+
+                if v2_idx < len(v2_lyrics):
+                    txt2 = v2_lyrics[v2_idx].strip()
+                    if txt2:
+                        lyr2 = ET.SubElement(note, 'lyric', {'number': '2'})
+                        ET.SubElement(lyr2, 'syllabic').text = 'single'
+                        ET.SubElement(lyr2, 'text').text = txt2
+                    v2_idx += 1
 
             tree.write(xml_path, encoding='utf-8', xml_declaration=True)
             return True
