@@ -35,7 +35,7 @@ export const defaultCategories: SongbookCategory[] = [
   { slug: 'tuyen-tap-ca-nhan', name: 'Tuyển Tập Của Tôi', icon: 'folder', description: 'Các bài hát riêng của bạn' },
 ];
 
-const STORAGE_KEY = 'sheet_converter_projects_v16';
+const STORAGE_KEY = 'sheet_converter_projects_v17';
 
 // Danh sách các bản nhạc chuẩn mẫu (Chỉ nạp lần đầu tiên khi chưa có dữ liệu)
 const initialProjects: ProjectItem[] = [
