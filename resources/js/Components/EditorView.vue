@@ -42,25 +42,25 @@
           </button>
         </div>
 
-        <!-- 🎼 Score Clean Mode Toggle (Bản Nhạc Sạch / Kèm Lời Hát) -->
+        <!-- 🎼 Score Mode Toggle (Kèm Lời Hát / Bản Nhạc Sạch) -->
         <div class="flex items-center bg-surface-container-low border border-border-subtle rounded-lg p-0.5 text-xs">
           <button
-            @click="setScoreViewMode('clean')"
-            class="px-2.5 py-1 rounded-md font-bold transition-all flex items-center gap-1"
-            :class="scoreViewMode === 'clean' ? 'bg-primary text-on-primary shadow-xs' : 'text-secondary hover:text-on-surface'"
-            title="Hiển thị nốt nhạc & hợp âm sạch sẽ 100%, không bị rối mắt bởi lời lỗi"
-          >
-            <span class="material-symbols-outlined text-xs">music_note</span>
-            <span>Bản Nhạc Sạch (Nốt)</span>
-          </button>
-          <button
             @click="setScoreViewMode('lyrics')"
-            class="px-2.5 py-1 rounded-md font-medium transition-all flex items-center gap-1"
-            :class="scoreViewMode === 'lyrics' ? 'bg-surface-container-lowest font-bold text-primary shadow-xs' : 'text-secondary hover:text-on-surface'"
-            title="Hiển thị nốt nhạc kèm lời bài hát"
+            class="px-2.5 py-1 rounded-md font-bold transition-all flex items-center gap-1"
+            :class="scoreViewMode === 'lyrics' ? 'bg-primary text-on-primary shadow-xs' : 'text-secondary hover:text-on-surface'"
+            title="Hiển thị nốt nhạc kèm lời bài hát tiếng Việt đầy đủ"
           >
             <span class="material-symbols-outlined text-xs">lyrics</span>
-            <span>Kèm Lời Hát</span>
+            <span>📝 Kèm Lời Hát</span>
+          </button>
+          <button
+            @click="setScoreViewMode('clean')"
+            class="px-2.5 py-1 rounded-md transition-all flex items-center gap-1"
+            :class="scoreViewMode === 'clean' ? 'bg-primary text-on-primary shadow-xs font-bold' : 'text-secondary hover:text-on-surface'"
+            title="Hiển thị nốt nhạc & hợp âm sạch sẽ (Bản không lời)"
+          >
+            <span class="material-symbols-outlined text-xs">music_note</span>
+            <span>🎼 Bản Sạch (Nốt)</span>
           </button>
         </div>
 
@@ -2062,8 +2062,8 @@ function onImportLocalXml(e: Event) {
   reader.readAsText(file);
 }
 
-// Score Display Mode: 'clean' (Bản Nhạc Sạch - Nốt & Hợp Âm) | 'lyrics' (Kèm Lời Hát)
-const scoreViewMode = ref<'clean' | 'lyrics'>('clean');
+// Score Display Mode: 'lyrics' (Kèm Lời Hát - Mặc định) | 'clean' (Bản Nhạc Sạch - Nốt & Hợp Âm)
+const scoreViewMode = ref<'clean' | 'lyrics'>('lyrics');
 
 function setScoreViewMode(mode: 'clean' | 'lyrics') {
   scoreViewMode.value = mode;
@@ -2276,6 +2276,10 @@ onMounted(async () => {
 
   await nextTick();
   let xml = props.xmlContent;
+  if (!xml || xml.trim() === '' || xml.includes('Untitled Score')) {
+    const titleToUse = props.projectTitle || 'TỪ CÕI LÒNG SÂU THẲM';
+    xml = OmrTranscriptionService.transcribeFromFile(titleToUse);
+  }
   if (!xml || xml.trim() === '') {
     xml = await fetch('/golden.xml').then(r => r.text()).catch(() => '');
   }
