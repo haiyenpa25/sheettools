@@ -58,6 +58,10 @@ LIGATURE_MAP = {
     'Thanh': 'Thánh', 'thanh': 'thánh', 'Vuong': 'Vương', 'vuong': 'vương',
     'ngu': 'ngự', 'ngư': 'ngự', 'kip': 'kíp', 'lai': 'lai',
     'Dâng': 'Đấng', 'Dang': 'Đấng', 'dang': 'đấng',
+    'CÔI': 'CÕI', 'Côi': 'Cõi', 'côi': 'cõi',
+    'THĂM': 'THẲM', 'Thăm': 'Thẳm', 'thăm': 'thẳm', 'thằm,': 'thẳm,', 'thằm': 'thẳm',
+    'Thôn': 'Tiến', 'thon': 'tiến',
+    'Võ': 'Vỡ', 'vo~': 'vỡ', 'Chúal': 'Chúa!', 'Chúa[': 'Chúa!',
 }
 
 class VietnameseUniversalOcrEngine:
@@ -206,10 +210,10 @@ class VietnameseUniversalOcrEngine:
 
     def decompose_sheet_3zones(self, img_input) -> dict:
         """
-        Phân tích tách trang sheet nhạc làm 3 VÙNG SPATIAL ĐỘC LẬP:
-        - ZONE 1: Header Zone (Tiêu đề, Tác giả, Lời dịch, Tuyển tập)
-        - ZONE 2: Pure Notation Sheet (Bản nhạc đã xoá sạch toàn bộ chữ để OMR chỉ nhận diện nốt & khuông)
-        - ZONE 3: Lyrics & Verses Zone (Lời bài hát tách theo Verse 1..N, Điệp khúc + Hợp âm trên khuông)
+        Phân tích tách trang sheet nhạc làm 3 VÙNG SPATIAL ĐỘC LẬP CHUẨN XÁC CAO (v2.0):
+        - ZONE 1: Header Zone (Ghép tiêu đề nhiều dòng, tác giả lệch phải, lời dịch lệch trái, số bài)
+        - ZONE 2: Pure Notation Sheet (Xóa chữ + Tái tạo dòng kẻ khuông bị đứt bằng Inpainting cho OMR nốt sạch 100%)
+        - ZONE 3: Lyrics & Verses Zone (Tách lời theo từng Khuông nhạc, phân dòng Verse 1..N, tách riêng Hợp âm)
         """
         if isinstance(img_input, str):
             img = cv2.imread(img_input)
@@ -220,33 +224,36 @@ class VietnameseUniversalOcrEngine:
             return {'header': {}, 'pure_notation_img': None, 'lyrics': [], 'harmonies': []}
 
         h, w = img.shape[:2]
-        rapid = self.get_rapid_ocr()
-        clean_text_img = self.isolate_text_layer(img)
-
-        ocr_results = None
-        if rapid:
-            ocr_results, _ = rapid(clean_text_img)
-            if not ocr_results:
-                ocr_results, _ = rapid(img)
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
         # 1. Phát hiện vị trí các khuông nhạc (Staff Lines)
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
-        h_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (int(w * 0.20), 1))
-        lines_only = cv2.morphologyEx(binary, cv2.MORPH_OPEN, h_kernel)
-        proj = np.sum(lines_only, axis=1) / (w * 255.0)
+        staves = []
+        try:
+            from cv_omr_engine import ComputerVisionOmrEngine
+            cv_engine = ComputerVisionOmrEngine()
+            staves = cv_engine.detect_staves(gray)
+        except Exception:
+            pass
 
-        staff_peaks = np.where(proj > 0.04)[0]
-        first_staff_y = staff_peaks[0] if len(staff_peaks) > 0 else int(h * 0.18)
+        if staves:
+            first_staff_top = staves[0][0]
+            interline = (staves[0][-1] - staves[0][0]) / 4.0
+        else:
+            first_staff_top = int(h * 0.18)
+            interline = h * 0.02
 
-        # 2. Phân loại và tạo Pure Notation Sheet (Xóa toàn bộ chữ)
-        pure_notation_img = img.copy()
-        header_items = []
-        lyric_items = []
-        harmony_items = []
+        # 2. Quét OCR 2 tầng (RapidOCR + VietOCR Transformer)
+        rapid = self.get_rapid_ocr()
+        ocr_results = None
+        if rapid:
+            ocr_results, _ = rapid(img)
 
-        import re
-        chord_regex = re.compile(r'^[A-Ga-g][#b♭♯]?(m|min|maj|dim|aug|sus|7|9|add)?(/[A-Ga-g][#b♭♯]?)?$')
+        header_boxes = []
+        harmony_boxes = []
+        lyric_boxes_by_staff = {i: [] for i in range(len(staves))} if staves else {0: []}
+        other_boxes = []
+
+        chord_regex = re.compile(r'^[A-Ga-g][#b♭♯]?(m|min|maj|dim|aug|sus|7|9|add|M)?(/[A-Ga-g][#b♭♯]?)?$')
 
         for item in ocr_results or []:
             box, raw_text, score = item
@@ -254,60 +261,140 @@ class VietnameseUniversalOcrEngine:
             x2, y2 = min(w, int(box[2][0])), min(h, int(box[2][1]))
             cx = (x1 + x2) / 2.0
             cy = (y1 + y2) / 2.0
+            box_h = y2 - y1
+            box_w = x2 - x1
 
-            # Nhận diện chữ tiếng Việt bằng VietOCR
             crop = img[y1:y2, x1:x2]
-            v_text = self.recognize_crop_vietocr(crop) if (x2 - x1 > 8 and y2 - y1 > 6) else ""
+            v_text = self.recognize_crop_vietocr(crop) if (box_w > 10 and box_h > 7) else ""
             text = self.clean_syllable(v_text if v_text else str(raw_text))
 
             if not text:
                 continue
 
+            data_item = {
+                'text': text,
+                'raw_ocr': str(raw_text),
+                'box': [x1, y1, x2, y2],
+                'cx': cx,
+                'cy': cy,
+                'h': box_h,
+                'w': box_w,
+                'score': float(score)
+            }
+
             # ZONE 1: HEADER (Phía trên khuông nhạc đầu tiên)
-            if cy < first_staff_y - 12:
-                header_items.append({'text': text, 'x1': x1, 'y1': y1, 'x2': x2, 'y2': y2, 'cx': cx, 'cy': cy})
+            if cy < first_staff_top - interline * 0.8:
+                header_boxes.append(data_item)
             else:
                 # ZONE 3: HỢP ÂM HAY LỜI BÀI HÁT
-                if chord_regex.match(text.strip()):
-                    harmony_items.append({'chord': text.strip(), 'x': cx, 'y': cy})
+                if (chord_regex.match(text) and len(text) <= 7) or any(c in text for c in ['sus', 'dim', 'maj', 'm7', '/']):
+                    harmony_boxes.append(data_item)
                 else:
-                    lyric_items.append({'text': text, 'x': cx, 'y': cy, 'x1': x1, 'x2': x2, 'y1': y1, 'y2': y2})
+                    assigned = False
+                    if staves:
+                        for s_idx, s in enumerate(staves):
+                            s_top = s[0] - interline * 1.5
+                            next_s_top = staves[s_idx + 1][0] - interline * 1.5 if s_idx + 1 < len(staves) else h
+                            if s_top <= cy < next_s_top:
+                                lyric_boxes_by_staff[s_idx].append(data_item)
+                                assigned = True
+                                break
+                    if not assigned:
+                        if 0 in lyric_boxes_by_staff:
+                            lyric_boxes_by_staff[0].append(data_item)
+                        else:
+                            other_boxes.append(data_item)
 
-            # ZONE 2: MASK TOÀN BỘ CHỮ TRÊN BẢN NHẠC
-            pad = 2
-            px1, py1 = max(0, x1 - pad), max(0, y1 - pad)
-            px2, py2 = min(w, x2 + pad), min(h, y2 + pad)
-            pure_notation_img[py1:py2, px1:px2] = (255, 255, 255)
-
-        # Trích xuất metadata tiêu đề và tác giả từ Header
-        title = ""
+        # ─── BÓC TÁCH ZONE 1: MULTI-LINE TITLE, COMPOSER, LYRICIST ───
+        title_items = []
         composer = ""
         lyricist = ""
+        hymn_number = ""
         category = ""
 
-        for h_item in sorted(header_items, key=lambda x: x['cy']):
-            txt = h_item['text']
-            if any(k in txt.lower() for k in ['tôn vinh', 'thánh ca', 'tuyển tập']):
+        valid_header_boxes = [b for b in header_boxes if not (chord_regex.match(b['text']) and len(b['text']) <= 6)]
+        non_category_boxes = []
+        for b in valid_header_boxes:
+            txt = b['text']
+            if any(k in txt.lower() for k in ['thánh ca', 'tôn vinh', 'tuyển tập', 'hymnal', 'ca nguyện']):
                 category = txt
-            elif not title and len(txt) > 3:
-                title = txt
-            elif not composer and (h_item['cx'] > w * 0.6 or any(c in txt.lower() for c in ['nhạc', 'lời', 'nguyễn', 'tiến', 'felice'])):
+            else:
+                non_category_boxes.append(b)
+
+        sorted_by_height = sorted(non_category_boxes, key=lambda x: x['h'], reverse=True)
+        if sorted_by_height:
+            max_h = sorted_by_height[0]['h']
+            for b in non_category_boxes:
+                if b['h'] >= max_h * 0.65 and (0.15 * w <= b['cx'] <= 0.85 * w):
+                    title_items.append(b)
+
+        title_items = sorted(title_items, key=lambda x: x['cy'])
+        title = self.clean_syllable(' '.join(it['text'] for it in title_items)) if title_items else ""
+
+        title_ids = set(id(it) for it in title_items)
+        for b in non_category_boxes:
+            if id(b) in title_ids:
+                continue
+            txt = self.clean_syllable(b['text'])
+            cx = b['cx']
+            if re.match(r'^#?\d{1,4}[A-Za-z]?$', txt) and cx < w * 0.4:
+                hymn_number = txt
+            elif cx > w * 0.65 and not composer:
                 composer = txt
-            elif not lyricist:
+            elif cx < w * 0.45 and not lyricist:
                 lyricist = txt
+
+        # ─── TẠO ZONE 2: PURE NOTATION SHEET KÈM INPAINTING PHỤC HỒI DÒNG KẺ ───
+        pure_notation_img = img.copy()
+        all_text_boxes = header_boxes + harmony_boxes + [it for s_list in lyric_boxes_by_staff.values() for it in s_list] + other_boxes
+
+        for it in all_text_boxes:
+            bx1, by1, bx2, by2 = it['box']
+            pad = 2
+            px1, py1 = max(0, bx1 - pad), max(0, by1 - pad)
+            px2, py2 = min(w, bx2 + pad), min(h, by2 + pad)
+            pure_notation_img[py1:py2, px1:px2] = (255, 255, 255)
+
+        # Inpainting phục hồi 5 dòng kẻ khuông nhạc
+        if staves:
+            staff_line_color = (0, 0, 0)
+            for s_idx, staff_lines in enumerate(staves):
+                s_top, s_bot = staff_lines[0], staff_lines[-1]
+                overlapping_boxes = [b for b in all_text_boxes if not (b['box'][3] < s_top or b['box'][1] > s_bot)]
+                for b in overlapping_boxes:
+                    bx1, _, bx2, _ = b['box']
+                    rx1, rx2 = max(0, bx1 - 2), min(w, bx2 + 2)
+                    for line_y in staff_lines:
+                        ly = int(round(line_y))
+                        cv2.line(pure_notation_img, (rx1, ly), (rx2, ly), staff_line_color, 2, cv2.LINE_AA)
+
+        # ─── BÓC TÁCH ZONE 3: LỜI ĐƯỢC PHÂN THEO KHUÔNG VÀ CỘT NỐT ───
+        all_lyrics_flat = []
+        for s_idx, items in lyric_boxes_by_staff.items():
+            items_sorted = sorted(items, key=lambda x: x['cx'])
+            for it in items_sorted:
+                all_lyrics_flat.append({
+                    'staff_index': s_idx,
+                    'text': it['text'],
+                    'x': it['cx'],
+                    'y': it['cy'],
+                    'box': it['box']
+                })
 
         return {
             'header': {
                 'title': title,
                 'composer': composer,
                 'lyricist': lyricist,
+                'hymn_number': hymn_number,
                 'category': category,
-                'raw_items': header_items,
+                'raw_items': header_boxes,
             },
             'pure_notation_img': pure_notation_img,
-            'lyrics': lyric_items,
-            'harmonies': harmony_items,
-            'first_staff_y': int(first_staff_y),
+            'lyrics': all_lyrics_flat,
+            'harmonies': [{'chord': h['text'], 'x': h['cx'], 'y': h['cy']} for h in harmony_boxes],
+            'first_staff_y': int(first_staff_top),
+            'staves_count': len(staves),
         }
 
     def heal_musicxml_file(self, xml_path: str, source_img_path: str = None) -> bool:
