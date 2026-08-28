@@ -35,7 +35,7 @@ export const defaultCategories: SongbookCategory[] = [
   { slug: 'tuyen-tap-ca-nhan', name: 'Tuyển Tập Của Tôi', icon: 'folder', description: 'Các bài hát riêng của bạn' },
 ];
 
-const STORAGE_KEY = 'sheet_converter_projects_v14';
+const STORAGE_KEY = 'sheet_converter_projects_v16';
 
 // Danh sách các bản nhạc chuẩn mẫu (Chỉ nạp lần đầu tiên khi chưa có dữ liệu)
 const initialProjects: ProjectItem[] = [
@@ -92,7 +92,7 @@ const initialProjects: ProjectItem[] = [
 
 class ProjectStore {
   public projects = reactive<ProjectItem[]>([]);
-  public activeProjectId = ref<string>('p_001');
+  public activeProjectId = ref<string>('p_002');
   public activeCategorySlug = ref<string>('all');
   public categories = reactive<SongbookCategory[]>([...defaultCategories]);
 
@@ -106,8 +106,13 @@ class ProjectStore {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw !== null) {
         const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) {
-          // Nạp đúng danh sách người dùng đã lưu (kể cả khi đã xoá rỗng)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          // Nạp và bổ sung XML nếu thiếu
+          parsed.forEach((p: ProjectItem) => {
+            if (!p.xmlContent || p.xmlContent.includes('Untitled Score') || p.xmlContent.length < 200) {
+              p.xmlContent = OmrTranscriptionService.transcribeFromFile(p.title || p.sourceFilename || '');
+            }
+          });
           this.projects.splice(0, this.projects.length, ...parsed);
           return;
         }
@@ -115,7 +120,6 @@ class ProjectStore {
     } catch (e) {
       console.warn('Failed to load projects from storage, using defaults:', e);
     }
-    // Chỉ nạp initialProjects vào lần đầu tiên mở ứng dụng
     this.projects.splice(0, this.projects.length, ...initialProjects);
     this.saveToStorage();
   }

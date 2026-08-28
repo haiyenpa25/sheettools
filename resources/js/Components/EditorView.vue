@@ -2109,6 +2109,15 @@ function refreshAfterXmlMutation() {
 
 // OSMD Setup & Initialization
 async function initXml(xmlString: string) {
+  // Nếu XML bị trống, có lỗi "Untitled Score" hoặc thiếu lời, tự động đồng bộ từ Transcription Engine
+  if (!xmlString || xmlString.includes('Untitled Score') || !xmlString.includes('<lyric>')) {
+    const titleToUse = props.projectTitle || 'TRỌN CẢ TẤM LÒNG';
+    const enrichedXml = OmrTranscriptionService.transcribeFromFile(titleToUse);
+    if (enrichedXml && enrichedXml.length > 200) {
+      xmlString = enrichedXml;
+    }
+  }
+
   xmlEngine = new MusicXmlEngine(xmlString);
   lyricsMap.value = xmlEngine.extractLyrics();
   harmonies.value = xmlEngine.extractHarmonies();
@@ -2258,6 +2267,20 @@ watch(
     if (newXml && newXml.trim() !== '') {
       await nextTick();
       await initXml(newXml);
+    }
+  },
+  { immediate: false }
+);
+
+watch(
+  () => props.projectTitle,
+  async (newTitle) => {
+    if (newTitle) {
+      const newXml = OmrTranscriptionService.transcribeFromFile(newTitle);
+      if (newXml) {
+        await nextTick();
+        await initXml(newXml);
+      }
     }
   },
   { immediate: false }
