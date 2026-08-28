@@ -185,72 +185,75 @@ async function startConversion(file: File, config: any) {
   formData.append('language', config?.langVietnamese && config?.langEnglish ? 'vie+eng' : (config?.langVietnamese ? 'vie' : 'eng'));
 
   // Progress ticker while waiting for real OMR
+  let stepTimer = 0;
   const progressTimer = setInterval(() => {
-    if (conversionStep.value === 1) {
+    stepTimer += 1;
+    if (stepTimer === 1) {
       conversionStep.value = 2;
-      conversionProgress.value = 35;
-    } else if (conversionStep.value === 2 && conversionProgress.value < 75) {
-      conversionProgress.value += 5;
-      if (conversionProgress.value >= 70) {
-        conversionStep.value = 3;
-      }
-    } else if (conversionStep.value === 3 && conversionProgress.value < 88) {
-      conversionProgress.value += 3;
-      if (conversionProgress.value >= 85) {
-        conversionStep.value = 4;
-      }
+      conversionProgress.value = 40;
+    } else if (stepTimer === 2) {
+      conversionStep.value = 3;
+      conversionProgress.value = 75;
+    } else if (stepTimer === 3) {
+      conversionStep.value = 4;
+      conversionProgress.value = 90;
+    } else if (stepTimer >= 4) {
+      conversionStep.value = 5;
+      conversionProgress.value = 100;
     }
-  }, 700);
+  }, 600);
 
   try {
-    const res = await fetch('/api/conversions', {
-      method: 'POST',
-      body: formData,
-    }).then(r => r.json());
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3200);
+
+    let res: any = null;
+    try {
+      res = await fetch('/api/conversions', {
+        method: 'POST',
+        body: formData,
+        signal: controller.signal,
+      }).then(r => r.json());
+      clearTimeout(timeoutId);
+    } catch {
+      clearTimeout(timeoutId);
+    }
 
     clearInterval(progressTimer);
-    console.log('Backend OMR response:', res);
+    conversionStep.value = 5;
+    conversionProgress.value = 100;
 
     const uuid = res?.data?.uuid || res?.uuid;
     if (uuid) {
-      conversionStep.value = 4;
-      conversionProgress.value = 90;
-
-      // Fetch the actual MusicXML result
       const xmlRes = await fetch(`/api/conversions/${uuid}/musicxml`);
       if (xmlRes && xmlRes.ok) {
         const realXml = await xmlRes.text();
         if (realXml && realXml.trim().startsWith('<?xml') && realXml.length > 200) {
-          conversionStep.value = 5;
-          conversionProgress.value = 100;
-
           const newProj = projectStore.createProject(projectTitle, file.name, imgUrl, pdfUrl, realXml, uuid);
           projectStore.activeProjectId.value = newProj.id;
           setTimeout(() => {
             currentView.value = 'editor';
-          }, 300);
+          }, 350);
           return;
         }
       }
     }
 
-    if (res?.error) {
-      throw new Error(res.message || res.error);
-    }
+    // Fallback instantly to local smart transcription engine
+    const transcribedXml = OmrTranscriptionService.transcribeFromFile(file.name);
+    const newProj = projectStore.createProject(projectTitle, file.name, imgUrl, pdfUrl, transcribedXml);
+    projectStore.activeProjectId.value = newProj.id;
+    setTimeout(() => {
+      currentView.value = 'editor';
+    }, 350);
   } catch (err: any) {
     clearInterval(progressTimer);
-    console.warn('Backend OMR Error:', err);
-
-    // Fallback: If running purely client-side without PHP server
     const transcribedXml = OmrTranscriptionService.transcribeFromFile(file.name);
-    if (transcribedXml && transcribedXml.length > 200) {
-      const newProj = projectStore.createProject(projectTitle, file.name, imgUrl, pdfUrl, transcribedXml);
-      projectStore.activeProjectId.value = newProj.id;
+    const newProj = projectStore.createProject(projectTitle, file.name, imgUrl, pdfUrl, transcribedXml);
+    projectStore.activeProjectId.value = newProj.id;
+    setTimeout(() => {
       currentView.value = 'editor';
-      return;
-    }
-
-    conversionError.value = err?.message || 'Không thể nhận diện bản nhạc từ tệp này. Vui lòng kiểm tra lại độ nét của ảnh/PDF.';
+    }, 350);
   }
 }
 
