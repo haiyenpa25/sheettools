@@ -190,34 +190,23 @@ async function startConversion(file: File, config: any) {
     stepTimer += 1;
     if (stepTimer === 1) {
       conversionStep.value = 2;
-      conversionProgress.value = 40;
-    } else if (stepTimer === 2) {
-      conversionStep.value = 3;
-      conversionProgress.value = 75;
+      conversionProgress.value = 35;
     } else if (stepTimer === 3) {
+      conversionStep.value = 3;
+      conversionProgress.value = 65;
+    } else if (stepTimer === 6) {
       conversionStep.value = 4;
-      conversionProgress.value = 90;
-    } else if (stepTimer >= 4) {
-      conversionStep.value = 5;
-      conversionProgress.value = 100;
+      conversionProgress.value = 85;
+    } else if (stepTimer > 8 && conversionProgress.value < 95) {
+      conversionProgress.value += 2;
     }
-  }, 600);
+  }, 1000);
 
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3200);
-
-    let res: any = null;
-    try {
-      res = await fetch('/api/conversions', {
-        method: 'POST',
-        body: formData,
-        signal: controller.signal,
-      }).then(r => r.json());
-      clearTimeout(timeoutId);
-    } catch {
-      clearTimeout(timeoutId);
-    }
+    const res = await fetch('/api/conversions', {
+      method: 'POST',
+      body: formData,
+    }).then(r => r.json());
 
     clearInterval(progressTimer);
     conversionStep.value = 5;
@@ -239,7 +228,7 @@ async function startConversion(file: File, config: any) {
       }
     }
 
-    // Fallback instantly to local smart transcription engine
+    // Fallback if backend returned without MusicXML
     const transcribedXml = OmrTranscriptionService.transcribeFromFile(file.name);
     const newProj = projectStore.createProject(projectTitle, file.name, imgUrl, pdfUrl, transcribedXml);
     projectStore.activeProjectId.value = newProj.id;

@@ -247,6 +247,15 @@ def process(input_path: str, output_dir: str, audiveris_hint=None) -> dict:
             f.write(result["log"])
     result["log_path"] = log_path
 
+    # Bơm Tiêu đề thật, Tác giả và toàn bộ Lời tiếng Việt từ 3-Zone OCR vào MusicXML kết quả
+    if result.get("success") and result.get("xml_path") and decomp_meta:
+        try:
+            from xml_tools.vietnamese_universal_ocr import inject_3zone_metadata_and_lyrics
+            inject_3zone_metadata_and_lyrics(result["xml_path"], decomp_meta)
+            print("[AudiverisRunner] Successfully injected 3-zone Vietnamese lyrics and metadata into MusicXML.")
+        except Exception as e_inj:
+            print(f"[AudiverisRunner] Lyrics injection notice: {e_inj}")
+
     return result
 
 

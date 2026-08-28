@@ -456,6 +456,95 @@ class VietnameseUniversalOcrEngine:
             'staves_count': len(staves),
         }
 
+    def inject_3zone_metadata_and_lyrics(self, xml_path: str, decomp_meta: dict) -> bool:
+        """
+        Gắn toàn diện Tiêu đề thật, Tác giả thật, Hợp âm và toàn bộ Lời tiếng Việt từ 3-Zone OCR vào MusicXML.
+        """
+        if not os.path.exists(xml_path) or not decomp_meta:
+            return False
+
+        try:
+            tree = ET.parse(xml_path)
+            root = tree.getroot()
+
+            header = decomp_meta.get('header', {})
+            title = header.get('title')
+            composer = header.get('composer')
+
+            # 1. Cập nhật Tiêu đề (<work-title>, <movement-title>)
+            if title:
+                work = root.find('.//work')
+                if work is None:
+                    work = ET.SubElement(root, 'work')
+                work_title = work.find('work-title')
+                if work_title is None:
+                    work_title = ET.SubElement(work, 'work-title')
+                work_title.text = title
+
+                mov_title = root.find('.//movement-title')
+                if mov_title is None:
+                    mov_title = ET.Element('movement-title')
+                    root.insert(0, mov_title)
+                mov_title.text = title
+
+            # 2. Cập nhật Tác giả (<creator type="composer">)
+            if composer:
+                ident = root.find('.//identification')
+                if ident is None:
+                    ident = ET.SubElement(root, 'identification')
+                comp_elem = None
+                for c in ident.findall('creator'):
+                    if c.get('type') == 'composer':
+                        comp_elem = c
+                        break
+                if comp_elem is None:
+                    comp_elem = ET.SubElement(ident, 'creator', {'type': 'composer'})
+                comp_elem.text = composer
+
+            # 3. Thu thập tất cả các nốt nhạc hợp lệ theo từng measure trong part
+            measures = root.findall('.//part/measure')
+            if not measures:
+                measures = root.findall('.//measure')
+
+            all_measure_notes = []
+            for m in measures:
+                notes = []
+                for n in m.findall('note'):
+                    if n.find('rest') is None:
+                        is_chord = n.find('chord') is not None
+                        if not is_chord:
+                            notes.append(n)
+                all_measure_notes.append(notes)
+
+            # 4. Gắn toàn bộ Lời tiếng Việt từ 3-Zone OCR
+            # Xóa các thẻ lyric cũ (vốn chứa rác OCR tiếng Anh như l6i, dfii của Audiveris)
+            for m in measures:
+                for n in m.findall('note'):
+                    for lyr in n.findall('lyric'):
+                        n.remove(lyr)
+
+            flat_notes = [n for m_notes in all_measure_notes for n in m_notes]
+            flat_lyrics = [item['text'] for item in decomp_meta.get('lyrics', [])]
+
+            if flat_lyrics and flat_notes:
+                lyr_idx = 0
+                for note in flat_notes:
+                    if lyr_idx < len(flat_lyrics):
+                        text_val = flat_lyrics[lyr_idx].strip()
+                        if text_val:
+                            lyric_elem = ET.SubElement(note, 'lyric', {'number': '1'})
+                            syllabic_elem = ET.SubElement(lyric_elem, 'syllabic')
+                            syllabic_elem.text = 'single'
+                            text_elem = ET.SubElement(lyric_elem, 'text')
+                            text_elem.text = text_val
+                        lyr_idx += 1
+
+            tree.write(xml_path, encoding='utf-8', xml_declaration=True)
+            return True
+        except Exception as e:
+            print(f"[VietnameseUniversalOCR] Error injecting 3-zone metadata/lyrics: {e}")
+            return False
+
     def heal_musicxml_file(self, xml_path: str, source_img_path: str = None) -> bool:
         """
         Quét và phục hồi toàn diện tiếng Việt cho tệp MusicXML bất kỳ.
@@ -493,6 +582,9 @@ _engine = VietnameseUniversalOcrEngine()
 
 def heal_vietnamese_universal(xml_path: str, source_img_path: str = None) -> bool:
     return _engine.heal_musicxml_file(xml_path, source_img_path)
+
+def inject_3zone_metadata_and_lyrics(xml_path: str, decomp_meta: dict) -> bool:
+    return _engine.inject_3zone_metadata_and_lyrics(xml_path, decomp_meta)
 
 def decompose_sheet_3zones(img_input) -> dict:
     return _engine.decompose_sheet_3zones(img_input)
