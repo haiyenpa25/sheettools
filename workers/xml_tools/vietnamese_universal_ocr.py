@@ -62,6 +62,7 @@ LIGATURE_MAP = {
     'THĂM': 'THẲM', 'Thăm': 'Thẳm', 'thăm': 'thẳm', 'thằm,': 'thẳm,', 'thằm': 'thẳm',
     'Thôn': 'Tiến', 'thon': 'tiến',
     'Võ': 'Vỡ', 'vo~': 'vỡ', 'Chúal': 'Chúa!', 'Chúa[': 'Chúa!',
+    'nguyên': 'nguyện', 'nguyen': 'nguyện', 'tối': 'tới',
 }
 
 class VietnameseUniversalOcrEngine:
@@ -253,7 +254,17 @@ class VietnameseUniversalOcrEngine:
         lyric_boxes_by_staff = {i: [] for i in range(len(staves))} if staves else {0: []}
         other_boxes = []
 
-        chord_regex = re.compile(r'^[A-Ga-g][#b♭♯]?(m|min|maj|dim|aug|sus|7|9|add|M)?(/[A-Ga-g][#b♭♯]?)?$')
+        chord_regex = re.compile(r'^[A-Ga-g][#b4♭♯]?(m|min|maj|dim|aug|sus|7|9|add|M)?([0-9\?\/]*[A-Ga-g]?[#b♭♯]?)?$')
+
+        def is_probable_chord(token: str) -> bool:
+            tk = token.strip()
+            if not tk or len(tk) > 7:
+                return False
+            if chord_regex.match(tk):
+                return True
+            if any(k in tk.lower() for k in ['sus', 'dim', 'maj', 'm7', 'f4m', 'f47', 'bsus', 'f#m', 'c#m', 'd#m', 'g#m', 'bb', 'eb', 'ab']):
+                return True
+            return False
 
         for item in ocr_results or []:
             box, raw_text, score = item
@@ -287,7 +298,10 @@ class VietnameseUniversalOcrEngine:
                 header_boxes.append(data_item)
             else:
                 # ZONE 3: HỢP ÂM HAY LỜI BÀI HÁT
-                if (chord_regex.match(text) and len(text) <= 7) or any(c in text for c in ['sus', 'dim', 'maj', 'm7', '/']):
+                if is_probable_chord(text):
+                    # Chuẩn hóa tên hợp âm sạch
+                    clean_chord = text.replace('4', '#').replace('?', '').strip()
+                    data_item['text'] = clean_chord
                     harmony_boxes.append(data_item)
                 else:
                     assigned = False
