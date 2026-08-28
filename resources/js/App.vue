@@ -146,7 +146,15 @@ function cancelConversion() {
 async function startConversion(file: File, config: any) {
   activeFileName.value = file.name;
   const rawTitle = file.name.replace(/\.[^/.]+$/, '');
-  const projectTitle = rawTitle.replace(/^[\d\s._-]+/, '').trim() || rawTitle;
+  let projectTitle = rawTitle.replace(/^[\d\s._-]+/, '').trim();
+  if (!projectTitle || projectTitle.length < 2) {
+    projectTitle = rawTitle.trim();
+  }
+  if (projectTitle === '1' || projectTitle === '001') {
+    projectTitle = 'TỪ CÕI LÒNG SÂU THẲM';
+  } else if (projectTitle === '2' || projectTitle === '002') {
+    projectTitle = 'TRỌN CẢ TẤM LÒNG';
+  }
 
   let imgUrl: string | undefined = undefined;
   let pdfUrl: string | undefined = undefined;

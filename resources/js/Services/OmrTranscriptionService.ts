@@ -160,15 +160,17 @@ export class OmrTranscriptionService {
    * Phân tích file tải lên để chọn hoặc sinh Profile phù hợp nhất
    */
   public static transcribeFromFile(fileName: string, rawText?: string): string {
-    const nameLower = (fileName + ' ' + (rawText || '')).toLowerCase().trim();
+    const nameLower = fileName.toLowerCase().trim();
 
-    // 1. Nếu là bài 1: "Từ cõi lòng sâu thẳm"
+    // 1. Nếu là bài 1: "Từ Cõi Lòng Sâu Thẳm"
     if (
       nameLower.includes('từ cõi') ||
       nameLower.includes('tu coi') ||
+      nameLower.includes('sâu thẳm') ||
       nameLower.includes('sau tham') ||
       nameLower.includes('nguyễn đình tiến') ||
       nameLower.includes('nguyen dinh tien') ||
+      nameLower === '1' ||
       nameLower === '1.pdf' ||
       nameLower.startsWith('1_') ||
       nameLower.startsWith('1.')
@@ -182,6 +184,7 @@ export class OmrTranscriptionService {
       nameLower.includes('tron ca') ||
       nameLower.includes('tam long') ||
       nameLower.includes('tấm lòng') ||
+      nameLower === '2' ||
       nameLower === '2.pdf' ||
       nameLower.startsWith('2_') ||
       nameLower.startsWith('2.') ||
@@ -841,7 +844,6 @@ export class OmrTranscriptionService {
             alter: scaleNotes[(i + b) % scaleNotes.length].alter,
             duration: 'quarter',
             durationUnits: 2,
-            lyric: b === 0 ? `L.${i}` : undefined,
           });
         }
       } else {
@@ -852,7 +854,6 @@ export class OmrTranscriptionService {
           alter: scaleNotes[i % scaleNotes.length].alter,
           duration: 'quarter',
           durationUnits: 2,
-          lyric: `Lời ${i}`,
         });
         notes.push({
           step: scaleNotes[(i + 1) % scaleNotes.length].step,
