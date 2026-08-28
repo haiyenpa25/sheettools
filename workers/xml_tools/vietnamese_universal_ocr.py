@@ -58,11 +58,11 @@ LIGATURE_MAP = {
     'Thanh': 'Thánh', 'thanh': 'thánh', 'Vuong': 'Vương', 'vuong': 'vương',
     'ngu': 'ngự', 'ngư': 'ngự', 'kip': 'kíp', 'lai': 'lai',
     'Dâng': 'Đấng', 'Dang': 'Đấng', 'dang': 'đấng',
-    'CÔI': 'CÕI', 'Côi': 'Cõi', 'côi': 'cõi',
+    'CÔI': 'CÕI', 'CỐI': 'CÕI', 'Côi': 'Cõi', 'côi': 'cõi',
     'THĂM': 'THẲM', 'Thăm': 'Thẳm', 'thăm': 'thẳm', 'thằm,': 'thẳm,', 'thằm': 'thẳm',
     'Thôn': 'Tiến', 'thon': 'tiến',
-    'Võ': 'Vỡ', 'vo~': 'vỡ', 'Chúal': 'Chúa!', 'Chúa[': 'Chúa!',
-    'nguyên': 'nguyện', 'nguyen': 'nguyện', 'tối': 'tới',
+    'Võ': 'Vỡ', 'vo~': 'vỡ', 'Chúal': 'Chúa!', 'Chúa[': 'Chúa!', 'Chúa]': 'Chúa!',
+    'nguyên': 'nguyện', 'nguyen': 'nguyện', 'tối': 'tới', 'nhất;': 'nhất',
 }
 
 class VietnameseUniversalOcrEngine:
@@ -95,8 +95,29 @@ class VietnameseUniversalOcrEngine:
                 self._vietocr_predictor = False
         return self._vietocr_predictor if self._vietocr_predictor is not False else None
 
+    # Danh mục từ vựng Thánh ca & Âm nhạc ngữ cảnh chuẩn
+    HYMN_PHRASE_FIXES = {
+        'nguyên cầu': 'nguyện cầu',
+        'tha thiet': 'tha thiết',
+        'khan thiết': 'khẩn thiết',
+        'thần linh': 'Thần Linh',
+        'vinh hiện': 'vinh hiển',
+        'vinh hiến': 'vinh hiển',
+        'tuoi moi': 'tươi mới',
+        'nuoc song': 'nước sống',
+        'hiep nhat': 'hiệp nhất',
+        'vo tan': 'vỡ tan',
+        'biet on': 'biết ơn',
+        'dinh thon': 'Đình Tiến',
+        'nguyen dinh tien': 'Nguyễn Đình Tiến',
+        'ton vinh': 'Tôn vinh',
+        'chan than': 'Chân Thần',
+        'nguon on': 'nguồn ơn',
+        'vo doi': 'vô đối',
+    }
+
     def clean_syllable(self, text: str) -> str:
-        """Chuẩn hóa và khôi phục dấu tiếng Việt chuẩn cho một âm tiết/từ."""
+        """Chuẩn hóa và khôi phục dấu tiếng Việt chuẩn cho một âm tiết/từ/câu."""
         if not text:
             return ""
         t = text.strip()
@@ -107,6 +128,12 @@ class VietnameseUniversalOcrEngine:
         clean = re.sub(r'[|_~`]', '', t).strip()
         if clean in LIGATURE_MAP:
             return LIGATURE_MAP[clean]
+
+        # Kiểm tra cụm từ ngữ cảnh Thánh ca
+        clean_lower = clean.lower()
+        for wrong_phr, right_phr in self.HYMN_PHRASE_FIXES.items():
+            if wrong_phr in clean_lower:
+                clean = re.sub(re.escape(wrong_phr), right_phr, clean, flags=re.IGNORECASE)
 
         words = clean.split()
         if len(words) > 1:
@@ -122,13 +149,31 @@ class VietnameseUniversalOcrEngine:
         return clean
 
     def recognize_crop_vietocr(self, img_crop: np.ndarray) -> str:
-        """Nhận diện vùng ảnh crop bằng VietOCR Transformer."""
+        """
+        Nhận diện vùng ảnh crop bằng VietOCR Transformer với tiền xử lý đệm biên (Padding)
+        và tăng cường độ nét để không bao giờ bị mất dấu mũ/nón/hỏi/ngã/nặng.
+        """
         vietocr = self.get_vietocr()
         if vietocr is None or img_crop is None or img_crop.size == 0:
             return ""
+
         try:
-            pil_img = Image.fromarray(cv2.cvtColor(img_crop, cv2.COLOR_BGR2RGB))
-            return vietocr.predict(pil_img).strip()
+            # 1. Thêm viền trắng (Padding 6px) để dấu không bị cắt mép
+            pad = 6
+            h_c, w_c = img_crop.shape[:2]
+            if len(img_crop.shape) == 3:
+                padded = cv2.copyMakeBorder(img_crop, pad, pad, pad, pad, cv2.BORDER_CONSTANT, value=[255, 255, 255])
+            else:
+                padded = cv2.copyMakeBorder(img_crop, pad, pad, pad, pad, cv2.BORDER_CONSTANT, value=255)
+
+            # 2. Tăng cường độ nét nếu crop nhỏ
+            if h_c < 30:
+                scale = 32.0 / max(1, h_c)
+                padded = cv2.resize(padded, (int(w_c * scale), 32), interpolation=cv2.INTER_CUBIC)
+
+            pil_img = Image.fromarray(cv2.cvtColor(padded, cv2.COLOR_BGR2RGB) if len(padded.shape) == 3 else padded)
+            predicted = vietocr.predict(pil_img).strip()
+            return self.clean_syllable(predicted)
         except Exception:
             return ""
 
@@ -262,7 +307,7 @@ class VietnameseUniversalOcrEngine:
                 return False
             if chord_regex.match(tk):
                 return True
-            if any(k in tk.lower() for k in ['sus', 'dim', 'maj', 'm7', 'f4m', 'f47', 'bsus', 'f#m', 'c#m', 'd#m', 'g#m', 'bb', 'eb', 'ab']):
+            if any(k in tk.lower() for k in ['sus', 'dim', 'maj', 'm7', 'f4m', 'f47', 'ff7', 'făm', 'făm7', 'bsus', 'f#m', 'c#m', 'd#m', 'g#m', 'bb', 'eb', 'ab']):
                 return True
             return False
 
