@@ -79,15 +79,25 @@ class AudiverisOmrEngine implements OmrEngineInterface
 
         // Parse JSON result từ Python worker
         $jsonResult = null;
-        // Tìm dòng JSON (bắt đầu bằng {) từ cuối output
-        foreach (array_reverse($output) as $line) {
-            $line = trim($line);
-            if (str_starts_with($line, '{') || str_starts_with($line, '[')) {
-                $jsonResult = json_decode($line, true);
-                break;
+        if (preg_match('/__OMR_JSON_RESULT__\s*(\{[\s\S]*?\})\s*$/', $rawOutput, $m)) {
+            $jsonResult = json_decode($m[1], true);
+        } elseif (preg_match('/(\{[\s\S]*"success"[\s\S]*\})\s*$/', $rawOutput, $m)) {
+            $jsonResult = json_decode($m[1], true);
+        }
+
+        // Tìm dòng JSON (bắt đầu bằng {) từ cuối output nếu regex chưa bắt
+        if (!$jsonResult) {
+            foreach (array_reverse($output) as $line) {
+                $line = trim($line);
+                if (str_starts_with($line, '{') || str_starts_with($line, '[')) {
+                    $res = json_decode($line, true);
+                    if ($res && is_array($res) && isset($res['success'])) {
+                        $jsonResult = $res;
+                        break;
+                    }
+                }
             }
         }
-        // Nếu không tìm thấy JSON trên 1 dòng, thử ghép toàn bộ output
         if (!$jsonResult) {
             $jsonResult = json_decode($rawOutput, true);
         }
@@ -97,15 +107,23 @@ class AudiverisOmrEngine implements OmrEngineInterface
         $foundMusicXml  = null;
         $foundOmr       = null;
 
-        if ($jsonResult && isset($jsonResult['xml_path']) && $jsonResult['xml_path']) {
+        if ($jsonResult && !empty($jsonResult['xml_path']) && file_exists($jsonResult['xml_path'])) {
             $foundMusicXml = $jsonResult['xml_path'];
         }
         if ($jsonResult && !($jsonResult['success'] ?? false)) {
             $warnings[] = $jsonResult['error'] ?? 'Unknown OMR error';
         }
 
-        // Fallback: quét thư mục output để tìm artifact
+        // Ưu tiên 1: Tệp đã được phục hồi hoàn chỉnh và inject lời tiếng Việt (score_healed.xml)
+        $healedCandidate = $outDir . DIRECTORY_SEPARATOR . 'score_healed.xml';
+        if (file_exists($healedCandidate) && filesize($healedCandidate) > 50) {
+            $foundMusicXml = $healedCandidate;
+        }
+
+        // Ưu tiên 2: Quét thư mục output nếu chưa tìm thấy, ưu tiên .xml/.musicxml trước .mxl
         if (!$foundMusicXml && is_dir($outDir)) {
+            $candidatesXml = [];
+            $candidatesMxl = [];
             $iterator = new RecursiveIteratorIterator(
                 new RecursiveDirectoryIterator($outDir, RecursiveDirectoryIterator::SKIP_DOTS)
             );
@@ -116,10 +134,17 @@ class AudiverisOmrEngine implements OmrEngineInterface
                     $foundArtifacts[] = $filePath;
                     if ($ext === 'omr' && !$foundOmr) {
                         $foundOmr = $filePath;
-                    } elseif (in_array($ext, ['mxl', 'musicxml', 'xml'], true) && !$foundMusicXml) {
-                        $foundMusicXml = $filePath;
+                    } elseif (in_array($ext, ['xml', 'musicxml'], true)) {
+                        $candidatesXml[] = $filePath;
+                    } elseif ($ext === 'mxl') {
+                        $candidatesMxl[] = $filePath;
                     }
                 }
+            }
+            if (!empty($candidatesXml)) {
+                $foundMusicXml = $candidatesXml[0];
+            } elseif (!empty($candidatesMxl)) {
+                $foundMusicXml = $candidatesMxl[0];
             }
         }
 

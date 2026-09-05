@@ -273,9 +273,9 @@ def main():
     args = parser.parse_args()
 
     result = process(args.input, args.output, args.audiveris)
-    print(json.dumps(result, ensure_ascii=False, indent=2))
+    print("__OMR_JSON_RESULT__")
+    print(json.dumps(result, ensure_ascii=False))
     sys.exit(0 if result["success"] else 1)
-
 
 
 if __name__ == "__main__":
