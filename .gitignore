@@ -15,6 +15,10 @@
 /storage/cache/*
 !/storage/cache/.gitkeep
 /storage/logs/*.log
+/storage/test_*
+
+# Tesseract traineddata
+/workers/tessdata/
 
 # Environment & IDE
 .env
