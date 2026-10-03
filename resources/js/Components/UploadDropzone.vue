@@ -19,7 +19,7 @@
       <div class="dropzone-content">
         <div class="dropzone-icon">🎼</div>
         <h3 class="dropzone-title">Kéo & Thả Bản nhạc PDF hoặc Ảnh vào đây</h3>
-        <p class="dropzone-subtitle">Hỗ trợ PDF nhiều trang, PNG, JPG, TIFF (Tối đa 25MB)</p>
+        <p class="dropzone-subtitle">Hỗ trợ PDF nhiều trang, PNG, JPG, TIFF (Tối đa 50MB)</p>
 
         <div class="dropzone-options" @click.stop>
           <label class="opt-label">

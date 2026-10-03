@@ -45,13 +45,13 @@
           </button>
 
           <button
-            @click="activeVersion = 'hopamchuan'"
+            @click="activeVersion = 'lyrics'"
             class="flex flex-col items-center gap-1 py-2.5 px-3 rounded-lg text-xs font-semibold transition-all"
-            :class="activeVersion === 'hopamchuan' ? 'bg-primary text-on-primary shadow-sm' : 'text-secondary hover:text-on-surface hover:bg-surface-container'"
+            :class="activeVersion === 'lyrics' ? 'bg-primary text-on-primary shadow-sm' : 'text-secondary hover:text-on-surface hover:bg-surface-container'"
           >
-            <span class="material-symbols-outlined text-lg">queue_music</span>
-            <span>3. Hợp Âm Chuẩn</span>
-            <span class="text-[10px] opacity-80 font-normal">hopamchuan.net</span>
+            <span class="material-symbols-outlined text-lg">lyrics</span>
+            <span>3. Chỉ Lời</span>
+            <span class="text-[10px] opacity-80 font-normal">Lời theo từng verse</span>
           </button>
         </div>
 
@@ -161,62 +161,16 @@
         </div>
 
         <!-- ═══════════════════════════════════════════════════════════ -->
-        <!-- TAB 3: HỢP ÂM CHUẨN (HOPAMCHUAN / CHORDPRO) -->
+        <!-- TAB 3: LYRICS ONLY -->
         <!-- ═══════════════════════════════════════════════════════════ -->
-        <div v-else-if="activeVersion === 'hopamchuan'" class="space-y-3">
-          <!-- Transpose & Style Controls Bar -->
-          <div class="flex items-center justify-between bg-surface-container-low p-3 rounded-xl border border-border-subtle">
-            <!-- Transpose -->
-            <div class="flex items-center gap-2">
-              <span class="text-xs font-semibold text-secondary">Đổi Tone:</span>
-              <button
-                @click="shiftTranspose(-1)"
-                class="w-7 h-7 flex items-center justify-center rounded-lg bg-surface-container-high hover:bg-primary hover:text-on-primary text-xs font-bold transition-colors"
-                title="Giảm 1 bán âm"
-              >
-                -
-              </button>
-              <span class="font-mono text-xs font-bold px-2 py-0.5 rounded bg-primary/10 text-primary">
-                {{ transposeSemitones >= 0 ? `+${transposeSemitones}` : transposeSemitones }}
-              </span>
-              <button
-                @click="shiftTranspose(1)"
-                class="w-7 h-7 flex items-center justify-center rounded-lg bg-surface-container-high hover:bg-primary hover:text-on-primary text-xs font-bold transition-colors"
-                title="Tăng 1 bán âm"
-              >
-                +
-              </button>
-              <button
-                v-if="transposeSemitones !== 0"
-                @click="transposeSemitones = 0"
-                class="text-[10px] text-secondary hover:text-primary underline ml-1"
-              >
-                Gốc
-              </button>
-            </div>
-
-            <!-- Style Selector -->
-            <div class="flex items-center gap-1.5">
-              <button
-                @click="chordStyle = 'above'"
-                class="text-xs px-2.5 py-1 rounded-md font-medium transition-colors"
-                :class="chordStyle === 'above' ? 'bg-primary/15 text-primary font-bold' : 'text-secondary hover:text-on-surface'"
-              >
-                Trên lời
-              </button>
-              <button
-                @click="chordStyle = 'inline'"
-                class="text-xs px-2.5 py-1 rounded-md font-medium transition-colors"
-                :class="chordStyle === 'inline' ? 'bg-primary/15 text-primary font-bold' : 'text-secondary hover:text-on-surface'"
-              >
-                Trong ngoặc [Em]
-              </button>
-            </div>
+        <div v-else-if="activeVersion === 'lyrics'" class="space-y-3">
+          <div class="bg-success/5 border border-success/20 rounded-lg p-3 flex items-center gap-2.5 text-xs text-on-surface">
+            <span class="material-symbols-outlined text-success text-sm">lyrics</span>
+            <span>Bản lời độc lập, giữ dấu tiếng Việt và phân tách rõ từng verse.</span>
           </div>
 
-          <!-- Live Preview Textarea -->
           <div class="relative">
-            <pre class="w-full h-48 p-3.5 bg-surface-container-lowest border border-border-subtle rounded-xl text-xs font-mono overflow-auto whitespace-pre leading-relaxed select-all text-on-surface">{{ hopAmChuanPreview }}</pre>
+            <pre class="w-full h-48 p-3.5 bg-surface-container-lowest border border-border-subtle rounded-xl text-xs font-mono overflow-auto whitespace-pre-wrap leading-relaxed select-all text-on-surface">{{ lyricsOnlyPreview }}</pre>
             
             <div v-if="copiedToast" class="absolute top-3 right-3 bg-success text-on-primary text-xs font-bold px-3 py-1.5 rounded-lg shadow-lg flex items-center gap-1.5 animate-in fade-in">
               <span class="material-symbols-outlined text-sm">check</span>
@@ -224,31 +178,23 @@
             </div>
           </div>
 
-          <!-- Action Buttons for HopAmChuan -->
-          <div class="grid grid-cols-3 gap-2">
+          <div class="grid grid-cols-2 gap-2">
             <button
               @click="copyToClipboard"
               class="flex items-center justify-center gap-1.5 py-2.5 px-3 bg-primary text-on-primary rounded-xl text-xs font-bold hover:brightness-110 active:scale-98 transition-all"
             >
               <span class="material-symbols-outlined text-sm">content_copy</span>
-              <span>Sao Chép 1-Click</span>
+              <span>Sao chép lời</span>
             </button>
 
             <button
-              @click="downloadHopAmChuanTxt"
+              @click="downloadLyricsOnly"
               class="flex items-center justify-center gap-1.5 py-2.5 px-3 border border-border-subtle bg-surface-container-low hover:bg-surface-container text-on-surface rounded-xl text-xs font-semibold transition-colors"
             >
               <span class="material-symbols-outlined text-sm">description</span>
               <span>Tải file .txt</span>
             </button>
 
-            <button
-              @click="downloadChordPro"
-              class="flex items-center justify-center gap-1.5 py-2.5 px-3 border border-border-subtle bg-surface-container-low hover:bg-surface-container text-on-surface rounded-xl text-xs font-semibold transition-colors"
-            >
-              <span class="material-symbols-outlined text-sm">audio_file</span>
-              <span>Tải file .cho</span>
-            </button>
           </div>
         </div>
 
@@ -280,26 +226,19 @@ const emit = defineEmits<{
   (e: 'close'): void;
 }>();
 
-const activeVersion = ref<'full' | 'instrumental' | 'hopamchuan'>('full');
-const transposeSemitones = ref<number>(0);
-const chordStyle = ref<'above' | 'inline'>('above');
+const activeVersion = ref<'full' | 'instrumental' | 'lyrics'>('full');
 const copiedToast = ref<boolean>(false);
 
 const engine = computed(() => new MusicXmlEngine(props.xmlContent));
 
-const hopAmChuanPreview = computed(() => {
-  try {
-    return engine.value.generateHopAmChuanText(transposeSemitones.value, chordStyle.value);
-  } catch (e) {
-    return 'Đang tạo bản Hợp Âm Chuẩn...';
-  }
+const lyricsOnlyPreview = computed(() => {
+  const verses = engine.value.extractLyrics();
+  return Object.keys(verses)
+    .map(Number)
+    .sort((a, b) => a - b)
+    .map(number => `VERSE ${number}\n${verses[number].map(item => item.text).filter(Boolean).join(' ')}`)
+    .join('\n\n');
 });
-
-function shiftTranspose(delta: number) {
-  transposeSemitones.value += delta;
-  if (transposeSemitones.value > 11) transposeSemitones.value -= 12;
-  if (transposeSemitones.value < -11) transposeSemitones.value += 12;
-}
 
 function triggerDownload(content: string, filename: string, mimeType: string) {
   const blob = new Blob([content], { type: mimeType });
@@ -329,18 +268,9 @@ function downloadInstrumental(format: string) {
   emit('close');
 }
 
-function downloadHopAmChuanTxt() {
-  triggerDownload(hopAmChuanPreview.value, `${getCleanName('hopamchuan')}.txt`, 'text/plain;charset=utf-8');
-}
-
-function downloadChordPro() {
-  const chordPro = engine.value.generateChordProText(transposeSemitones.value);
-  triggerDownload(chordPro, `${getCleanName('chordpro')}.cho`, 'text/plain;charset=utf-8');
-}
-
 async function copyToClipboard() {
   try {
-    await navigator.clipboard.writeText(hopAmChuanPreview.value);
+    await navigator.clipboard.writeText(lyricsOnlyPreview.value);
     copiedToast.value = true;
     setTimeout(() => {
       copiedToast.value = false;
@@ -348,6 +278,10 @@ async function copyToClipboard() {
   } catch (err) {
     console.error('Lỗi sao chép:', err);
   }
+}
+
+function downloadLyricsOnly() {
+  triggerDownload(lyricsOnlyPreview.value + '\n', `${getCleanName('lyrics_only')}.txt`, 'text/plain;charset=utf-8');
 }
 
 function printScore() {

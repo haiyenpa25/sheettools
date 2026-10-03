@@ -3,7 +3,9 @@
 declare(strict_types=1);
 
 // CORS Headers
-header('Access-Control-Allow-Origin: *');
+$corsOrigin = getenv('CORS_ORIGIN') ?: 'http://localhost:5173';
+header('Access-Control-Allow-Origin: ' . $corsOrigin);
+header('Vary: Origin');
 header('Access-Control-Allow-Methods: GET, POST, PATCH, DELETE, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
 
@@ -22,6 +24,8 @@ use App\Services\LyricService;
 use App\Services\HarmonyService;
 use App\Services\NoteService;
 use App\Services\ExportService;
+use App\Services\JobQueueService;
+use App\Services\PageArtifactService;
 use App\DTOs\LyricDto;
 use App\DTOs\NoteEditDto;
 use App\Repositories\ConversionProjectRepository;
@@ -34,6 +38,8 @@ $harmonyService = new HarmonyService();
 $noteService = new NoteService();
 $exportService = new ExportService();
 $healthService = new HealthCheckService();
+$jobQueue = new JobQueueService();
+$pageArtifacts = new PageArtifactService();
 
 $rawUri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH) ?: '/';
 $uri = preg_replace('#^/SheetTools(?:/api\.php)?#', '', $rawUri);
@@ -47,8 +53,21 @@ function jsonResponse(mixed $data, int $status = 200): void {
     exit;
 }
 
-// 1. Health Check Endpoint
+// 1. Public liveness endpoint
 if ($uri === '/api/health') {
+    jsonResponse(['ok' => true]);
+}
+
+$apiToken = getenv('SHEETTOOLS_API_TOKEN') ?: '';
+if ($apiToken !== '') {
+    $authorization = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
+    $providedToken = str_starts_with($authorization, 'Bearer ') ? substr($authorization, 7) : '';
+    if (!hash_equals($apiToken, $providedToken)) {
+        jsonResponse(['error' => 'UNAUTHORIZED', 'message' => 'A valid bearer token is required.'], 401);
+    }
+}
+
+if ($uri === '/api/health/full' && $method === 'GET') {
     jsonResponse($healthService->checkAll());
 }
 
@@ -63,14 +82,45 @@ if ($uri === '/api/conversions') {
 
     if ($method === 'POST') {
         $language = $_POST['language'] ?? 'vie+eng';
+        $detectLyrics = filter_var($_POST['detect_lyrics'] ?? true, FILTER_VALIDATE_BOOLEAN);
+        $detectChords = filter_var($_POST['detect_chords'] ?? true, FILTER_VALIDATE_BOOLEAN);
 
         // 1. Tạo từ tệp tải lên (PDF, PNG, JPG, XML)
         if (isset($_FILES['file'])) {
             $file = $_FILES['file'];
-            $project = $conversionService->createProject($file['name'], $file['tmp_name'], ['language' => $language]);
-            $conversionService->processProject($project->uuid);
-            $fresh = $repo->findByUuid($project->uuid);
-            jsonResponse(['data' => $fresh ? $fresh->toArray() : $project->toArray()], 201);
+            $config = require __DIR__ . '/config/omr.php';
+            $extension = strtolower(pathinfo((string)($file['name'] ?? ''), PATHINFO_EXTENSION));
+            $allowedMimeTypes = [
+                'pdf' => ['application/pdf'],
+                'png' => ['image/png'],
+                'jpg' => ['image/jpeg'],
+                'jpeg' => ['image/jpeg'],
+            ];
+            $error = (int)($file['error'] ?? UPLOAD_ERR_NO_FILE);
+            $size = (int)($file['size'] ?? 0);
+            $maxBytes = (int)$config['max_file_size_mb'] * 1024 * 1024;
+            $isHttpUpload = PHP_SAPI === 'cli' || is_uploaded_file((string)($file['tmp_name'] ?? ''));
+            $mime = $isHttpUpload && is_file((string)$file['tmp_name'])
+                ? (new finfo(FILEINFO_MIME_TYPE))->file((string)$file['tmp_name'])
+                : false;
+            if ($error !== UPLOAD_ERR_OK || !$isHttpUpload || $size < 1 || $size > $maxBytes || !isset($allowedMimeTypes[$extension]) || !in_array($mime, $allowedMimeTypes[$extension], true)) {
+                jsonResponse(['error' => 'INVALID_UPLOAD', 'message' => 'Upload must be a valid PDF, PNG, or JPEG within the configured size limit.'], 422);
+            }
+            try {
+                $project = $conversionService->createProject((string)$file['name'], (string)$file['tmp_name'], [
+                'language' => $language,
+                'detect_lyrics' => $detectLyrics,
+                'detect_chords' => $detectChords,
+                ]);
+            } catch (InvalidArgumentException $e) {
+                jsonResponse(['error' => 'INVALID_UPLOAD', 'message' => $e->getMessage()], 422);
+            }
+            $project->status = 'QUEUED';
+            $project->currentStep = 'queued';
+            $project->progress = 5;
+            $repo->save($project);
+            $jobId = $jobQueue->enqueue($project->uuid);
+            jsonResponse(['data' => $project->toArray(), 'job_id' => $jobId], 202);
         }
 
         // 2. Tạo trực tiếp từ JSON payload (VD: nhập XML, cấu trúc mới từ Wizard)
@@ -84,7 +134,12 @@ if ($uri === '/api/conversions') {
             $tempFile = tempnam(sys_get_temp_dir(), 'proj_init_');
             file_put_contents($tempFile, $xmlContent);
 
-            $project = $conversionService->createProject($filename, $tempFile, ['language' => $language]);
+            try {
+                $project = $conversionService->createProject($filename, $tempFile, ['language' => $language]);
+            } catch (InvalidArgumentException $e) {
+                @unlink($tempFile);
+                jsonResponse(['error' => 'INVALID_SOURCE', 'message' => $e->getMessage()], 422);
+            }
             if (!empty($xmlContent) && strlen($xmlContent) > 50) {
                 $rawXmlPath = $storageService->getRawMusicXmlPath($project->uuid);
                 $curXmlPath = $storageService->getCurrentMusicXmlPath($project->uuid);
@@ -100,6 +155,26 @@ if ($uri === '/api/conversions') {
         }
 
         jsonResponse(['error' => 'NO_FILE_OR_DATA', 'message' => 'Vui lòng cung cấp tệp upload hoặc dữ liệu JSON.'], 400);
+    }
+}
+
+// Library trash endpoints are resolved before active-project lookup.
+if ($uri === '/api/trash' && $method === 'GET') {
+    $repo = new ConversionProjectRepository();
+    jsonResponse(['data' => array_map(fn($p) => $p->toArray(), $repo->listDeleted())]);
+}
+
+if (preg_match('#^/api/trash/([a-zA-Z0-9_\-]+)/(restore|purge)$#', $uri, $trashMatch)) {
+    $repo = new ConversionProjectRepository();
+    $uuid = $trashMatch[1];
+    $action = $trashMatch[2];
+    if ($action === 'restore' && $method === 'POST') {
+        $ok = $repo->restore($uuid);
+        jsonResponse(['success' => $ok], $ok ? 200 : 404);
+    }
+    if ($action === 'purge' && $method === 'DELETE') {
+        $ok = $repo->purge($uuid);
+        jsonResponse(['success' => $ok], $ok ? 200 : 404);
     }
 }
 
@@ -121,13 +196,28 @@ if (preg_match('#^/api/conversions/([a-zA-Z0-9_\-]+)(/.*)?$#', $uri, $matches)) 
             jsonResponse(['data' => $project->toArray()]);
         }
         if ($method === 'DELETE') {
+            $cancelledJobs = $jobQueue->cancelProject($uuid);
             $ok = $repo->delete($uuid);
-            jsonResponse(['success' => $ok, 'message' => 'Project deleted successfully.']);
+            jsonResponse(['success' => $ok, 'cancelled_jobs' => $cancelledJobs, 'message' => 'Project moved to trash.'], $ok ? 200 : 500);
         }
         if ($method === 'PATCH') {
             $input = json_decode(file_get_contents('php://input'), true) ?: [];
-            if (isset($input['title'])) $project->sourceFilename = $input['title'];
-            if (isset($input['status'])) $project->status = $input['status'];
+            if (isset($input['title'])) $project->title = trim((string)$input['title']);
+            if (isset($input['composer'])) $project->composer = trim((string)$input['composer']);
+            if (isset($input['category_slug'])) $project->categorySlug = trim((string)$input['category_slug']);
+            if (isset($input['category_name'])) $project->categoryName = trim((string)$input['category_name']);
+            if (isset($input['song_number'])) $project->songNumber = trim((string)$input['song_number']);
+            if (isset($input['status'])) {
+                $allowedTransitions = [
+                    'UPLOADED' => ['QUEUED'], 'QUEUED' => ['FAILED'], 'PROCESSING' => ['FAILED'],
+                    'NEEDS_REVIEW' => ['READY', 'FAILED'], 'READY' => ['NEEDS_REVIEW'], 'FAILED' => ['QUEUED'],
+                ];
+                $nextStatus = (string)$input['status'];
+                if (!in_array($nextStatus, $allowedTransitions[$project->status] ?? [], true)) {
+                    jsonResponse(['error' => 'INVALID_STATUS_TRANSITION'], 422);
+                }
+                $project->status = $nextStatus;
+            }
             $repo->save($project);
             jsonResponse(['success' => true, 'data' => $project->toArray()]);
         }
@@ -162,13 +252,39 @@ if (preg_match('#^/api/conversions/([a-zA-Z0-9_\-]+)(/.*)?$#', $uri, $matches)) 
                 $xmlData = $rawInput;
             }
 
-            if (empty($xmlData) || strlen($xmlData) < 50) {
-                jsonResponse(['error' => 'INVALID_XML', 'message' => 'MusicXML data is invalid or empty.'], 400);
+            $xmlDoc = new DOMDocument();
+            $previous = libxml_use_internal_errors(true);
+            $validXml = $xmlData !== '' && $xmlDoc->loadXML($xmlData, LIBXML_NONET) && $xmlDoc->documentElement?->localName === 'score-partwise';
+            libxml_clear_errors();
+            libxml_use_internal_errors($previous);
+            if (!$validXml) {
+                jsonResponse(['error' => 'INVALID_XML', 'message' => 'A valid score-partwise MusicXML document is required.'], 422);
             }
 
             file_put_contents($xmlPath, $xmlData);
             jsonResponse(['success' => true, 'message' => 'MusicXML updated successfully.', 'bytes' => strlen($xmlData)]);
         }
+    }
+
+    // GET /api/conversions/{uuid}/lyrics
+    if ($subPath === '/lyrics-artifact' && $method === 'GET') {
+        $artifactPath = $storageService->getLyricsArtifactPath($uuid);
+        if (!file_exists($artifactPath)) {
+            jsonResponse(['error' => 'LYRICS_ARTIFACT_NOT_READY', 'message' => 'Independent OCR lyrics artifact is unavailable.'], 404);
+        }
+        header('Content-Type: application/json; charset=utf-8');
+        readfile($artifactPath);
+        exit;
+    }
+
+    if ($subPath === '/document-artifact' && $method === 'GET') {
+        $artifactPath = $storageService->getDocumentArtifactPath($uuid);
+        if (!file_exists($artifactPath)) {
+            jsonResponse(['error' => 'DOCUMENT_ARTIFACT_NOT_READY', 'message' => 'Semantic page document is unavailable.'], 404);
+        }
+        header('Content-Type: application/json; charset=utf-8');
+        readfile($artifactPath);
+        exit;
     }
 
     // GET /api/conversions/{uuid}/lyrics
@@ -278,11 +394,89 @@ if (preg_match('#^/api/conversions/([a-zA-Z0-9_\-]+)(/.*)?$#', $uri, $matches)) 
         jsonResponse($res);
     }
 
+    // GET /api/conversions/{uuid}/pages and /pages/{zero-based-index}
+    if ($subPath === '/pages' && $method === 'GET') {
+        $pages = array_map(
+            static fn(array $page): array => $page + [
+                'url' => '/api/conversions/' . $uuid . '/pages/' . $page['index'],
+            ],
+            $pageArtifacts->list($uuid)
+        );
+        jsonResponse(['data' => $pages, 'page_count' => count($pages)]);
+    }
+
+    if ($subPath === '/page-progress' && $method === 'GET') {
+        $path = $storageService->getPageProgressPath($uuid);
+        $progress = is_file($path) ? json_decode((string) file_get_contents($path), true) : null;
+        if (!is_array($progress)) {
+            jsonResponse(['error' => 'PAGE_PROGRESS_NOT_READY'], 404);
+        }
+        jsonResponse(['data' => $progress]);
+    }
+
+    if (preg_match('#^/pages/(\d+)$#', $subPath, $pageMatch) && $method === 'GET') {
+        $page = $pageArtifacts->resolve($uuid, (int) $pageMatch[1]);
+        if ($page === null) {
+            jsonResponse(['error' => 'PAGE_NOT_FOUND', 'message' => 'Rendered source page is unavailable.'], 404);
+        }
+        header('Content-Type: ' . $page['mime_type']);
+        header('Content-Length: ' . filesize($page['path']));
+        header('Cache-Control: private, max-age=3600');
+        readfile($page['path']);
+        exit;
+    }
+
+    if (preg_match('#^/pages/(\d+)/(regions|regions-debug)$#', $subPath, $pageMatch) && $method === 'GET') {
+        $artifact = $pageArtifacts->resolveLayout($uuid, (int) $pageMatch[1], $pageMatch[2] === 'regions-debug');
+        if ($artifact === null) {
+            jsonResponse(['error' => 'PAGE_LAYOUT_NOT_READY'], 404);
+        }
+        header('Content-Type: ' . $artifact['mime_type']);
+        header('Cache-Control: private, no-store');
+        readfile($artifact['path']);
+        exit;
+    }
+
+    // POST /api/conversions/{uuid}/pages/{zero-based-index}/retry
+    if (preg_match('#^/pages/(\d+)/retry$#', $subPath, $pageMatch) && $method === 'POST') {
+        $pageIndex = (int) $pageMatch[1];
+        if ($pageArtifacts->resolve($uuid, $pageIndex) === null) {
+            jsonResponse(['error' => 'PAGE_NOT_FOUND', 'message' => 'Rendered source page is unavailable.'], 404);
+        }
+        if (in_array($project->status, ['QUEUED', 'PROCESSING'], true)) {
+            jsonResponse(['error' => 'ALREADY_RUNNING', 'message' => 'Project is already queued or processing.'], 409);
+        }
+        $project->status = 'QUEUED';
+        $project->currentStep = 'queued';
+        $project->progress = 5;
+        $project->errorMessage = null;
+        @unlink($storageService->getPageProgressPath($uuid));
+        $repo->save($project);
+        $jobId = $jobQueue->enqueue($uuid, $pageIndex);
+        jsonResponse(['success' => true, 'job_id' => $jobId, 'page_index' => $pageIndex, 'data' => $project->toArray()], 202);
+    }
+
+    // POST /api/conversions/{uuid}/retry — resume from durable per-page checkpoints.
+    if ($subPath === '/retry' && $method === 'POST') {
+        if (in_array($project->status, ['QUEUED', 'PROCESSING'], true)) {
+            jsonResponse(['error' => 'ALREADY_RUNNING', 'message' => 'Project is already queued or processing.'], 409);
+        }
+        $project->status = 'QUEUED';
+        $project->currentStep = 'queued';
+        $project->progress = 5;
+        $project->errorMessage = null;
+        @unlink($storageService->getPageProgressPath($uuid));
+        $repo->save($project);
+        $jobId = $jobQueue->enqueue($uuid);
+        jsonResponse(['success' => true, 'job_id' => $jobId, 'data' => $project->toArray()], 202);
+    }
+
     // POST /api/conversions/{uuid}/export
     if ($subPath === '/export' && $method === 'POST') {
         $input = json_decode(file_get_contents('php://input'), true) ?: [];
         $format = $input['format'] ?? 'musicxml';
-        $exportPath = $exportService->export($uuid, $format);
+        $variant = $input['variant'] ?? 'full';
+        $exportPath = $exportService->export($uuid, $format, $variant);
 
         if (!$exportPath || !file_exists($exportPath)) {
             jsonResponse(['error' => 'EXPORT_FAILED', 'message' => 'Failed to export score file.'], 500);
@@ -291,7 +485,8 @@ if (preg_match('#^/api/conversions/([a-zA-Z0-9_\-]+)(/.*)?$#', $uri, $matches)) 
         jsonResponse([
             'success' => true,
             'format' => $format,
-            'download_url' => '/api/conversions/' . $uuid . '/download?format=' . $format,
+            'variant' => $variant,
+            'download_url' => '/api/conversions/' . $uuid . '/download?format=' . $format . '&variant=' . $variant,
             'file_name' => basename($exportPath),
         ]);
     }
@@ -299,9 +494,15 @@ if (preg_match('#^/api/conversions/([a-zA-Z0-9_\-]+)(/.*)?$#', $uri, $matches)) 
     // GET /api/conversions/{uuid}/download
     if ($subPath === '/download' && $method === 'GET') {
         $format = $_GET['format'] ?? 'musicxml';
-        $exportPath = $storageService->getProjectDir($uuid) . DIRECTORY_SEPARATOR . 'exports' . DIRECTORY_SEPARATOR . 'score_export.' . $format;
+        $variant = $_GET['variant'] ?? 'full';
+        if (!in_array($format, ['xml', 'musicxml', 'mxl'], true) || !in_array($variant, ['full', 'notation', 'lyrics'], true)) {
+            jsonResponse(['error' => 'INVALID_EXPORT_OPTIONS', 'message' => 'Unsupported export format or variant.'], 400);
+        }
+        $baseName = $variant === 'lyrics' ? 'lyrics_only' : ($variant === 'notation' ? 'score_notation_only' : 'score_full');
+        $extension = $variant === 'lyrics' ? 'txt' : $format;
+        $exportPath = $storageService->getProjectDir($uuid) . DIRECTORY_SEPARATOR . 'export' . DIRECTORY_SEPARATOR . $baseName . '.' . $extension;
         if (!file_exists($exportPath)) {
-            $exportPath = $exportService->export($uuid, $format);
+            $exportPath = $exportService->export($uuid, $format, $variant);
         }
 
         if (!$exportPath || !file_exists($exportPath)) {

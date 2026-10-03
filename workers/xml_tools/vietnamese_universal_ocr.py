@@ -16,6 +16,8 @@ Quy trình trích xuất văn bản sâu:
 
 import os
 import re
+import unicodedata
+from difflib import SequenceMatcher
 import cv2
 import numpy as np
 import xml.etree.ElementTree as ET
@@ -64,6 +66,81 @@ LIGATURE_MAP = {
     'Võ': 'Vỡ', 'vo~': 'vỡ', 'Chúal': 'Chúa!', 'Chúa[': 'Chúa!', 'Chúa]': 'Chúa!',
     'nguyên': 'nguyện', 'nguyen': 'nguyện', 'tối': 'tới', 'nhất;': 'nhất',
 }
+
+
+def select_ocr_candidate(
+    rapid_text: str,
+    rapid_confidence: float,
+    tesseract_text: str,
+    tesseract_confidence: float,
+) -> tuple[str, float, str]:
+    """Select an OCR result without language-model guessing or silent correction."""
+    rapid = (rapid_text or "").strip()
+    tess = (tesseract_text or "").strip()
+    candidates = []
+    if rapid:
+        candidates.append((rapid, max(0.0, min(1.0, float(rapid_confidence))), "rapidocr"))
+    if tess:
+        candidates.append((tess, max(0.0, min(1.0, float(tesseract_confidence))), "tesseract"))
+    return max(candidates, key=lambda item: item[1]) if candidates else ("", 0.0, "none")
+
+
+def select_vietnamese_candidate(candidates: list[dict]) -> tuple[str, float, str]:
+    """Prefer a diacritic-preserving candidate when visual readings otherwise agree."""
+    valid = [item for item in candidates if str(item.get('text', '')).strip()]
+    if not valid:
+        return "", 0.0, "none"
+
+    def folded(text: str) -> str:
+        normalized = unicodedata.normalize('NFD', text.lower().replace('đ', 'd'))
+        return ''.join(char for char in normalized if unicodedata.category(char) != 'Mn' and char.isalnum())
+
+    def mark_count(text: str) -> int:
+        return sum(1 for char in unicodedata.normalize('NFD', text) if unicodedata.category(char) == 'Mn') + text.lower().count('đ')
+
+    best = max(valid, key=lambda item: float(item.get('confidence', 0.0)))
+    best_folded = folded(str(best['text']))
+    same_reading = [item for item in valid if folded(str(item['text'])) == best_folded]
+    marked = max(same_reading, key=lambda item: mark_count(str(item['text'])), default=best)
+    # Confidence from different OCR engines is not directly calibrated. When
+    # base letters are identical, a viable Vietnamese-engine reading with
+    # explicit tone marks carries more information than an accentless reading.
+    if mark_count(str(marked['text'])) > mark_count(str(best['text'])) and float(marked.get('confidence', 0.0)) >= 0.60:
+        best = marked
+
+    # For line OCR, fuse tokens independently. This recovers
+    # "NGOI CA TINH..." + "NGƠI ễA TÌNH..." as
+    # "NGƠI CA TÌNH..." instead of accepting the hallucinated whole line.
+    base_tokens = str(best['text']).split()
+    tokenized = [(item, str(item['text']).split()) for item in valid]
+    if len(base_tokens) > 1 and all(len(tokens) == len(base_tokens) for _, tokens in tokenized):
+        fused = []
+        used_engines = set()
+        for index, base_token in enumerate(base_tokens):
+            base_core = re.sub(r'^\W+|\W+$', '', base_token, flags=re.UNICODE)
+            prefix = base_token[:len(base_token) - len(base_token.lstrip('“"\'([{'))]
+            suffix_match = re.search(r'[^\wÀ-ỹĐđ]+$', base_token, flags=re.UNICODE)
+            suffix = suffix_match.group(0) if suffix_match else ''
+            choice = base_core
+            for item, tokens in tokenized:
+                candidate_token = tokens[index]
+                candidate_core = re.sub(r'^\W+|\W+$', '', candidate_token, flags=re.UNICODE)
+                incoherent_case = bool(candidate_core[:1].islower() and any(char.isupper() for char in candidate_core[1:]))
+                similarity = SequenceMatcher(None, folded(candidate_core), folded(base_core)).ratio()
+                if (
+                    not incoherent_case
+                    and similarity >= 0.65
+                    and abs(len(candidate_core) - len(base_core)) <= 1
+                    and float(item.get('confidence', 0.0)) >= 0.60
+                    and mark_count(candidate_core) > mark_count(choice)
+                ):
+                    choice = candidate_core
+                    used_engines.add(str(item.get('engine', 'unknown')))
+            fused.append(prefix + choice + suffix)
+        fused_text = ' '.join(fused)
+        if fused_text != str(best['text']):
+            return fused_text, min(float(item.get('confidence', 0.0)) for item in valid), 'consensus:' + '+'.join(sorted(used_engines or {'multi'}))
+    return str(best['text']), float(best.get('confidence', 0.0)), str(best.get('engine', 'unknown'))
 
 class VietnameseUniversalOcrEngine:
     """Động cơ nhận diện và phân tầng không gian chữ tiếng Việt chuyên sâu cho OMR."""
@@ -176,6 +253,48 @@ class VietnameseUniversalOcrEngine:
             return self.clean_syllable(predicted)
         except Exception:
             return ""
+
+    def recognize_crop_tesseract(self, img_crop: np.ndarray) -> tuple[str, float]:
+        """Recognize a detected word/line crop with the installed Vietnamese LSTM model."""
+        if img_crop is None or img_crop.size == 0:
+            return "", 0.0
+        try:
+            import pytesseract
+            from pytesseract import Output
+
+            height, width = img_crop.shape[:2]
+            padded = cv2.copyMakeBorder(
+                img_crop, 8, 8, 8, 8, cv2.BORDER_CONSTANT, value=(255, 255, 255)
+            )
+            target_height = max(64, int(height * 1.5))
+            scale = target_height / max(1, padded.shape[0])
+            padded = cv2.resize(
+                padded,
+                (max(1, int(padded.shape[1] * scale)), target_height),
+                interpolation=cv2.INTER_CUBIC,
+            )
+            psm = 7 if width / max(1, height) >= 3.0 else 8
+            data = pytesseract.image_to_data(
+                padded,
+                lang="vie",
+                config=f"--oem 1 --psm {psm}",
+                output_type=Output.DICT,
+            )
+            words = []
+            confidences = []
+            for text, confidence in zip(data.get("text", []), data.get("conf", [])):
+                token = str(text).strip()
+                try:
+                    conf = float(confidence)
+                except (TypeError, ValueError):
+                    conf = -1.0
+                if token and conf >= 0:
+                    words.append(token)
+                    confidences.append(conf / 100.0)
+            return " ".join(words), (sum(confidences) / len(confidences) if confidences else 0.0)
+        except Exception as exc:
+            print(f"[VietnameseOCR] Tesseract crop notice: {exc}")
+            return "", 0.0
 
     def isolate_text_layer(self, img: np.ndarray) -> np.ndarray:
         """
@@ -322,7 +441,19 @@ class VietnameseUniversalOcrEngine:
 
             crop = img[y1:y2, x1:x2]
             v_text = self.recognize_crop_vietocr(crop) if (box_w > 10 and box_h > 7) else ""
-            text = self.clean_syllable(v_text if v_text else str(raw_text))
+            tess_text, tess_score = self.recognize_crop_tesseract(crop) if (box_w > 10 and box_h > 7) else ("", 0.0)
+            candidates = [
+                {'text': str(raw_text), 'confidence': float(score), 'engine': 'rapidocr'},
+                {'text': tess_text, 'confidence': float(tess_score), 'engine': 'tesseract'},
+            ]
+            if v_text:
+                candidates.append({'text': v_text, 'confidence': 0.75, 'engine': 'vietocr'})
+            selected_text, selected_score, selected_engine = select_vietnamese_candidate(candidates)
+            from xml_tools.vietnamese_context import restore_liturgical_diacritics
+            selected_text, context_changes = restore_liturgical_diacritics(selected_text)
+            if context_changes:
+                selected_engine += '+context'
+            text = self.clean_syllable(selected_text)
 
             if not text:
                 continue
@@ -335,36 +466,43 @@ class VietnameseUniversalOcrEngine:
                 'cy': cy,
                 'h': box_h,
                 'w': box_w,
-                'score': float(score)
+                'score': float(selected_score),
+                'ocr_engine': selected_engine,
+                'ocr_candidates': candidates,
+                'context_changes': context_changes,
             }
 
-            # ZONE 1: HEADER (Phía trên khuông nhạc đầu tiên)
+            # ZONE 1: HEADER (Phía trên khuông nhạc đầu tiên). Header giữ nguyên
+            # cả dòng; dòng lời phải tách thành từng âm tiết trước khi căn nốt.
             if cy < first_staff_top - interline * 0.8:
                 header_boxes.append(data_item)
-            else:
-                # ZONE 3: HỢP ÂM HAY LỜI BÀI HÁT
-                if is_probable_chord(text):
-                    # Chuẩn hóa tên hợp âm sạch
-                    clean_chord = text.replace('4', '#').replace('?', '').strip()
-                    data_item['text'] = clean_chord
-                    harmony_boxes.append(data_item)
-                else:
-                    assigned = False
-                    if staves:
-                        for s_idx, s in enumerate(staves):
-                            s_top = s[0] - interline * 1.5
-                            next_s_top = staves[s_idx + 1][0] - interline * 1.5 if s_idx + 1 < len(staves) else h
-                            if s_top <= cy < next_s_top:
-                                lyric_boxes_by_staff[s_idx].append(data_item)
-                                assigned = True
-                                break
-                    if not assigned:
-                        if 0 in lyric_boxes_by_staff:
-                            lyric_boxes_by_staff[0].append(data_item)
-                        else:
-                            other_boxes.append(data_item)
+                continue
 
-        # ─── BÓC TÁCH ZONE 1: MULTI-LINE TITLE, COMPOSER, LYRICIST ───
+            for token_item in split_ocr_line_item(data_item):
+                token_text = token_item['text']
+                # ZONE 3: HỢP ÂM HAY LỜI BÀI HÁT
+                if is_probable_chord(token_text):
+                    token_item['text'] = token_text.replace('4', '#').replace('?', '').strip()
+                    harmony_boxes.append(token_item)
+                    continue
+                assigned = False
+                if staves:
+                    for s_idx, s in enumerate(staves):
+                        lyric_top = s[-1] + interline * 0.20
+                        # Chữ gần khuông kế tiếp là hợp âm/direction của khuông đó,
+                        # không phải verse phụ của khuông trước.
+                        lyric_bottom = (
+                            (s[-1] + staves[s_idx + 1][0]) / 2.0
+                            if s_idx + 1 < len(staves) else h
+                        )
+                        if lyric_top <= token_item['cy'] < lyric_bottom:
+                            lyric_boxes_by_staff[s_idx].append(token_item)
+                            assigned = True
+                            break
+                if not assigned:
+                    other_boxes.append(token_item)
+
+        # ─── BÓC TÁCH ZONE 1: SEMANTIC DOCUMENT HEADER ───
         title_items = []
         composer = ""
         lyricist = ""
@@ -403,35 +541,29 @@ class VietnameseUniversalOcrEngine:
             elif cx < w * 0.45 and not lyricist:
                 lyricist = txt
 
-        # ─── TẠO ZONE 2: PURE NOTATION SHEET KÈM INPAINTING PHỤC HỒI DÒNG KẺ ───
-        pure_notation_img = img.copy()
+        from xml_tools.document_layout import analyze_header_semantics
+        document_model = analyze_header_semantics(header_boxes, w, first_staff_top)
+        title = document_model['title']['text'] or title
+        composer = document_model['composer']['text'] or composer
+        hymn_number = document_model['hymn_number']['text'] or hymn_number
+        category = document_model['collection']['text'] or category
+
+        # ─── TẠO ZONE 2: NOTATION-FIRST, KHÔNG ĐƯỢC XÓA KÝ HIỆU TRONG KHUÔNG ───
         all_text_boxes = header_boxes + harmony_boxes + [it for s_list in lyric_boxes_by_staff.values() for it in s_list] + other_boxes
-
-        for it in all_text_boxes:
-            bx1, by1, bx2, by2 = it['box']
-            pad = 2
-            px1, py1 = max(0, bx1 - pad), max(0, by1 - pad)
-            px2, py2 = min(w, bx2 + pad), min(h, by2 + pad)
-            pure_notation_img[py1:py2, px1:px2] = (255, 255, 255)
-
-        # Inpainting phục hồi 5 dòng kẻ khuông nhạc
-        if staves:
-            staff_line_color = (0, 0, 0)
-            for s_idx, staff_lines in enumerate(staves):
-                s_top, s_bot = staff_lines[0], staff_lines[-1]
-                overlapping_boxes = [b for b in all_text_boxes if not (b['box'][3] < s_top or b['box'][1] > s_bot)]
-                for b in overlapping_boxes:
-                    bx1, _, bx2, _ = b['box']
-                    rx1, rx2 = max(0, bx1 - 2), min(w, bx2 + 2)
-                    for line_y in staff_lines:
-                        ly = int(round(line_y))
-                        cv2.line(pure_notation_img, (rx1, ly), (rx2, ly), staff_line_color, 2, cv2.LINE_AA)
+        from preprocessing.notation_layers import build_notation_layer
+        layer_result = build_notation_layer(img, all_text_boxes, staves)
+        pure_notation_img = layer_result['notation_image']
 
         # ─── BÓC TÁCH ZONE 3: LỜI ĐƯỢC PHÂN TÁCH ĐA VERSE (VERSE 1 & VERSE 2) THEO DÒNG Y ───
         all_lyrics_flat = []
         for s_idx, items in lyric_boxes_by_staff.items():
             # Lọc bỏ ký hiệu hợp âm nếu còn sót
-            valid_lyric_items = [it for it in items if not is_probable_chord(it['text'])]
+            valid_lyric_items = [
+                it for it in items
+                if not is_probable_chord(it['text'])
+                and not re.fullmatch(r'[#\d.,:;]+', it['text'])
+                and not re.fullmatch(r'[A-Za-z]', it['text'])
+            ]
             if not valid_lyric_items:
                 continue
 
@@ -461,8 +593,18 @@ class VietnameseUniversalOcrEngine:
                         'text': it['text'],
                         'x': it['cx'],
                         'y': it['cy'],
-                        'box': it['box']
+                        'box': it['box'],
+                        'confidence': float(it.get('score', 0.0)),
+                        'ocr_engine': it.get('ocr_engine'),
+                        'raw_ocr': it.get('raw_ocr'),
+                        'ocr_candidates': it.get('ocr_candidates', []),
+                        'context_changes': it.get('context_changes', []),
                     })
+
+        # A sung phrase can continue at the next system. Run context over the
+        # complete spatially ordered lyric stream, preserving every word box.
+        from xml_tools.vietnamese_context import restore_liturgical_items
+        all_lyrics_flat = restore_liturgical_items(all_lyrics_flat)
 
         return {
             'header': {
@@ -471,6 +613,9 @@ class VietnameseUniversalOcrEngine:
                 'lyricist': lyricist,
                 'hymn_number': hymn_number,
                 'category': category,
+                'description': document_model['description']['text'],
+                'scripture_reference': document_model['scripture_reference']['text'],
+                'document_model': document_model,
                 'raw_items': header_boxes,
             },
             'pure_notation_img': pure_notation_img,
@@ -478,9 +623,14 @@ class VietnameseUniversalOcrEngine:
             'harmonies': [{'chord': h['text'], 'x': h['cx'], 'y': h['cy']} for h in harmony_boxes],
             'first_staff_y': int(first_staff_top),
             'staves_count': len(staves),
+            'notation_separation': {
+                'removed_text_boxes': len(layer_result['removed_boxes']),
+                'protected_ocr_boxes': len(layer_result['protected_boxes']),
+                'protected_bands': layer_result['protected_bands'],
+            },
         }
 
-    def inject_3zone_metadata_and_lyrics(self, xml_path: str, decomp_meta: dict) -> bool:
+    def inject_3zone_metadata_and_lyrics(self, xml_path: str, decomp_meta: dict, inject_lyrics: bool = True) -> bool:
         """
         Gắn toàn diện Tiêu đề thật, Tác giả thật, Hợp âm và toàn bộ Lời tiếng Việt (Đa Verse) từ 3-Zone OCR vào MusicXML.
         """
@@ -525,6 +675,33 @@ class VietnameseUniversalOcrEngine:
                     comp_elem = ET.SubElement(ident, 'creator', {'type': 'composer'})
                 comp_elem.text = composer
 
+            # 2b. Preserve semantic page text as MusicXML credits. The complete
+            # geometry and raw OCR remain authoritative in document.json.
+            document_model = header.get('document_model', {})
+            credit_roles = [
+                ('collection', 'subtitle'),
+                ('hymn_number', 'title-number'),
+                ('description', 'subtitle'),
+                ('scripture_reference', 'subtitle'),
+            ]
+            for role, credit_type in credit_roles:
+                field = document_model.get(role, {})
+                value = str(field.get('text', '')).strip()
+                if not value:
+                    continue
+                credit = ET.SubElement(root, 'credit', {'page': '1'})
+                ET.SubElement(credit, 'credit-type').text = credit_type
+                attributes = {'justify': 'left' if role in ('collection', 'hymn_number') else 'center'}
+                box = field.get('box', [])
+                if len(box) == 4:
+                    attributes['default-x'] = str(round((float(box[0]) + float(box[2])) / 2.0, 2))
+                    attributes['default-y'] = str(round((float(box[1]) + float(box[3])) / 2.0, 2))
+                ET.SubElement(credit, 'credit-words', attributes).text = value
+
+            if not inject_lyrics:
+                tree.write(xml_path, encoding='utf-8', xml_declaration=True)
+                return True
+
             # 3. Thu thập tất cả các nốt nhạc hợp lệ theo từng measure trong part
             measures = root.findall('.//part/measure')
             if not measures:
@@ -548,27 +725,22 @@ class VietnameseUniversalOcrEngine:
 
             flat_notes = [n for m_notes in all_measure_notes for n in m_notes]
 
-            v1_lyrics = [item['text'] for item in decomp_meta.get('lyrics', []) if item.get('verse_number', 1) == 1]
-            v2_lyrics = [item['text'] for item in decomp_meta.get('lyrics', []) if item.get('verse_number', 1) == 2]
-
-            v1_idx = 0
-            v2_idx = 0
+            verses = {}
+            for item in decomp_meta.get('lyrics', []):
+                verse_number = int(item.get('verse_number', 1))
+                text = str(item.get('text', '')).strip()
+                if text:
+                    verses.setdefault(verse_number, []).append(text)
+            verse_indexes = {number: 0 for number in verses}
             for note in flat_notes:
-                if v1_idx < len(v1_lyrics):
-                    txt1 = v1_lyrics[v1_idx].strip()
-                    if txt1:
-                        lyr1 = ET.SubElement(note, 'lyric', {'number': '1'})
-                        ET.SubElement(lyr1, 'syllabic').text = 'single'
-                        ET.SubElement(lyr1, 'text').text = txt1
-                    v1_idx += 1
-
-                if v2_idx < len(v2_lyrics):
-                    txt2 = v2_lyrics[v2_idx].strip()
-                    if txt2:
-                        lyr2 = ET.SubElement(note, 'lyric', {'number': '2'})
-                        ET.SubElement(lyr2, 'syllabic').text = 'single'
-                        ET.SubElement(lyr2, 'text').text = txt2
-                    v2_idx += 1
+                for verse_number in sorted(verses):
+                    index = verse_indexes[verse_number]
+                    if index >= len(verses[verse_number]):
+                        continue
+                    lyric = ET.SubElement(note, 'lyric', {'number': str(verse_number)})
+                    ET.SubElement(lyric, 'syllabic').text = 'single'
+                    ET.SubElement(lyric, 'text').text = verses[verse_number][index]
+                    verse_indexes[verse_number] += 1
 
             tree.write(xml_path, encoding='utf-8', xml_declaration=True)
             return True
@@ -614,9 +786,41 @@ _engine = VietnameseUniversalOcrEngine()
 def heal_vietnamese_universal(xml_path: str, source_img_path: str = None) -> bool:
     return _engine.heal_musicxml_file(xml_path, source_img_path)
 
-def inject_3zone_metadata_and_lyrics(xml_path: str, decomp_meta: dict) -> bool:
-    return _engine.inject_3zone_metadata_and_lyrics(xml_path, decomp_meta)
+def inject_3zone_metadata_and_lyrics(xml_path: str, decomp_meta: dict, inject_lyrics: bool = True) -> bool:
+    return _engine.inject_3zone_metadata_and_lyrics(xml_path, decomp_meta, inject_lyrics)
 
 def decompose_sheet_3zones(img_input) -> dict:
     return _engine.decompose_sheet_3zones(img_input)
-
+def split_ocr_line_item(item: dict) -> list[dict]:
+    """Split a line-level OCR box into Vietnamese syllable boxes by character width."""
+    tokens = [token for token in re.split(r'\s+', str(item.get('text', '')).strip()) if token]
+    if len(tokens) <= 1:
+        return [item]
+    x1, y1, x2, y2 = item['box']
+    total_units = sum(max(len(token), 1) for token in tokens) + (len(tokens) - 1)
+    cursor = float(x1)
+    available = float(x2 - x1)
+    result = []
+    for index, token in enumerate(tokens):
+        token_width = available * max(len(token), 1) / total_units
+        token_x1 = cursor
+        token_x2 = float(x2) if index == len(tokens) - 1 else cursor + token_width
+        child = dict(item)
+        child.update({
+            'text': token,
+            'box': [int(round(token_x1)), y1, int(round(token_x2)), y2],
+            'cx': (token_x1 + token_x2) / 2.0,
+            'w': max(1, int(round(token_x2 - token_x1))),
+        })
+        child_candidates = []
+        for candidate in item.get('ocr_candidates', []):
+            candidate_tokens = [value for value in re.split(r'\s+', str(candidate.get('text', '')).strip()) if value]
+            candidate_copy = dict(candidate)
+            candidate_copy['scope'] = 'token' if len(candidate_tokens) == len(tokens) else 'line'
+            if len(candidate_tokens) == len(tokens):
+                candidate_copy['text'] = candidate_tokens[index]
+            child_candidates.append(candidate_copy)
+        child['ocr_candidates'] = child_candidates
+        result.append(child)
+        cursor = token_x2 + available / total_units
+    return result

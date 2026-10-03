@@ -188,25 +188,27 @@ class ComputerVisionOmrEngine:
         if len(peaks) < 4:
             return []
 
-        # Gom các peak thành nhóm 4–5 dòng (1 khuông nhạc)
+        # Ghép theo mẫu 5 dòng cách đều. Không gom toàn bộ peak gần nhau vì
+        # beam, dấu nối và chữ gạch chân có thể tạo >6 peak rồi làm mất cả khuông.
         interline_est = self._detect_interline(gray_img)
-        gap_threshold = interline_est * 2.5   # Khoảng cách tối đa giữa 2 dòng trong 1 khuông
-
         staves = []
-        current_group = [float(peaks[0])]
-
-        for y in peaks[1:]:
-            dy = y - current_group[-1]
-            if dy <= gap_threshold:
-                current_group.append(float(y))
-            else:
-                if 4 <= len(current_group) <= 6:  # Cho phép 4–6 dòng (thay vì đúng 5)
-                    # Chọn đúng 5 dòng đại diện nếu có hơn 5
-                    staves.append(self._normalize_staff_lines(current_group))
-                current_group = [float(y)]
-
-        if 4 <= len(current_group) <= 6:
-            staves.append(self._normalize_staff_lines(current_group))
+        tolerance = max(2.0, interline_est * 0.38)
+        peak_values = [float(value) for value in peaks]
+        for start in peak_values:
+            candidate = [start]
+            for line_number in range(1, 5):
+                target = start + line_number * interline_est
+                nearest = min(peak_values, key=lambda value: abs(value - target))
+                if abs(nearest - target) > tolerance or nearest <= candidate[-1]:
+                    candidate = []
+                    break
+                candidate.append(nearest)
+            if len(candidate) != 5:
+                continue
+            center = sum(candidate) / 5.0
+            if any(abs(center - sum(existing) / 5.0) < interline_est * 2.0 for existing in staves):
+                continue
+            staves.append(candidate)
 
         # Sắp xếp theo y tăng dần (từ trên xuống dưới)
         staves.sort(key=lambda s: s[0])
@@ -963,8 +965,9 @@ class ComputerVisionOmrEngine:
                 page_out_dir = os.path.join(output_dir, f"page_{i:04d}")
                 os.makedirs(page_out_dir, exist_ok=True)
                 result = self.process_single_page(png_path, page_out_dir)
-                if result.get('success') and result.get('xml_path'):
-                    page_xmls.append(result['xml_path'])
+                if not result.get('success') or not result.get('xml_path'):
+                    return {"success": False, "error": f"Trang {i + 1} không nhận diện được; không tạo bản ghép thiếu trang"}
+                page_xmls.append(result['xml_path'])
 
             if not page_xmls:
                 return {"success": False, "error": "Không xử lý được trang nào"}
@@ -975,11 +978,10 @@ class ComputerVisionOmrEngine:
                 sys.path.insert(0, os.path.dirname(__file__))
                 from xml_tools.page_merger import merge_musicxml_pages
                 title = Path(input_file).stem
-                merge_musicxml_pages(page_xmls, combined_xml, title)
+                if not merge_musicxml_pages(page_xmls, combined_xml, title):
+                    return {"success": False, "error": "Không thể ghép MusicXML đa trang an toàn"}
             except Exception as e:
-                print(f"[CV-OMR] page_merger lỗi ({e}), dùng trang đầu tiên")
-                import shutil
-                shutil.copy(page_xmls[0], combined_xml)
+                return {"success": False, "error": f"Lỗi ghép đa trang: {e}"}
 
             return {
                 "success": True,

@@ -15,6 +15,12 @@ $tests = [
         __DIR__ . '/Unit/HarmonyServiceTest.php',
         __DIR__ . '/Unit/NoteServiceTest.php',
         __DIR__ . '/Unit/LyricServiceTest.php',
+        __DIR__ . '/Unit/JobQueueServiceTest.php',
+        __DIR__ . '/Unit/PageArtifactServiceTest.php',
+        __DIR__ . '/Unit/ImagePreprocessServiceTest.php',
+        __DIR__ . '/Unit/StorageServiceTest.php',
+        __DIR__ . '/Unit/SecurityBoundaryTest.php',
+        __DIR__ . '/Unit/ProjectLibraryTest.php',
     ],
     'Golden Reference Tests' => [
         __DIR__ . '/Golden/GoldenHymnExtractionTest.php',
@@ -24,11 +30,17 @@ $tests = [
     ],
     'Integration Lifecycle Tests' => [
         __DIR__ . '/Integration/ConversionPipelineTest.php',
+        __DIR__ . '/Integration/PageRetryPipelineTest.php',
     ],
 ];
 
 $totalSuites = 0;
 $passedSuites = 0;
+
+if ((int) ini_get('zend.assertions') !== 1) {
+    fwrite(STDERR, "ERROR: Tests require zend.assertions=1. Run php -d zend.assertions=1 tests/run_all.php\n");
+    exit(2);
+}
 
 foreach ($tests as $groupName => $files) {
     echo "▶ GROUP: {$groupName}\n";
@@ -45,8 +57,24 @@ foreach ($tests as $groupName => $files) {
     echo "\n";
 }
 
+foreach (['PdfExtractionTest.py', 'PageSourceTest.py', 'PageProgressTest.py', 'PageWorkerRetryTest.py', 'PageLayoutTest.py', 'PreprocessDebugTest.py', 'ImageQualityTest.py', 'ZipInputTest.py', 'NotationLayerTest.py', 'SemanticMergeTest.py', 'StaffAndLyricSegmentationTest.py', 'HeaderSemanticsTest.py', 'VietnameseContextTest.py', 'NotationOnlyModeTest.py', 'LyricsArtifactTest.py', 'LyricsAlignmentTest.py', 'MultiPartLyricsAlignmentTest.py', 'ValidatorDurationTest.py', 'ValidatorStructureTest.py', 'AccuracyReportTest.py', 'MultiPageMergerTest.py'] as $pythonTestName) {
+    $totalSuites++;
+    $pythonTest = __DIR__ . '/Python/' . $pythonTestName;
+    $pythonOutput = [];
+    $pythonExit = 0;
+    $pythonBin = getenv('PYTHON_BIN') ?: 'python';
+    exec(escapeshellarg($pythonBin) . ' ' . escapeshellarg($pythonTest) . ' 2>&1', $pythonOutput, $pythonExit);
+    echo implode("\n", $pythonOutput) . "\n\n";
+    if ($pythonExit === 0) {
+        $passedSuites++;
+    } else {
+        echo "  [FAIL] {$pythonTestName} exited with {$pythonExit}\n\n";
+    }
+}
+
 echo "=================================================================\n";
-echo "   TEST SUMMARY: {$passedSuites} / {$totalSuites} TEST SUITES PASSED (100%)\n";
+$percent = $totalSuites > 0 ? (int) round(($passedSuites / $totalSuites) * 100) : 0;
+echo "   TEST SUMMARY: {$passedSuites} / {$totalSuites} TEST SUITES PASSED ({$percent}%)\n";
 echo "=================================================================\n\n";
 
 if ($passedSuites !== $totalSuites) {

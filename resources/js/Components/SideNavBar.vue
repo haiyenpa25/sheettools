@@ -25,7 +25,7 @@
             class="material-symbols-outlined text-xl"
             :class="{ 'filled': currentView === 'dashboard' }"
           >dashboard</span>
-          <span>Dashboard</span>
+          <span>Tổng quan</span>
         </button>
       </li>
 
@@ -41,7 +41,7 @@
             class="material-symbols-outlined text-xl"
             :class="{ 'filled': currentView === 'library' }"
           >library_music</span>
-          <span>Project Library</span>
+          <span>Thư viện dự án</span>
         </button>
       </li>
 
@@ -57,7 +57,7 @@
             class="material-symbols-outlined text-xl"
             :class="{ 'filled': currentView === 'editor' }"
           >edit_note</span>
-          <span>Score Editor</span>
+          <span>Biên tập bản nhạc</span>
           <span class="ml-auto w-2 h-2 rounded-full bg-success"></span>
         </button>
       </li>
@@ -74,7 +74,7 @@
             class="material-symbols-outlined text-xl"
             :class="{ 'filled': currentView === 'settings' }"
           >settings</span>
-          <span>Settings</span>
+          <span>Cài đặt</span>
         </button>
       </li>
     </ul>
@@ -85,8 +85,8 @@
         AU
       </div>
       <div class="min-w-0">
-        <p class="font-label-sm text-sm text-on-surface font-semibold truncate">Admin User</p>
-        <p class="font-mono-label text-xs text-secondary">Pro Plan • v2.4.1</p>
+        <p class="font-label-sm text-sm text-on-surface font-semibold truncate">Chế độ cục bộ</p>
+        <p class="font-mono-label text-xs text-secondary">Docker Desktop • v2.4.1</p>
       </div>
     </div>
   </nav>

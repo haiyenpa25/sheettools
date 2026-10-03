@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 @theme {
-  --color-primary: #004ac6;
-  --color-primary-container: #2563eb;
+  --color-primary: #38bdf8;
+  --color-primary-container: #0284c7;
   --color-on-primary: #ffffff;
   --color-on-primary-container: #eeefff;
   --color-primary-fixed: #dbe1ff;
@@ -11,7 +11,7 @@
   --color-on-primary-fixed-variant: #003ea8;
   --color-inverse-primary: #b4c5ff;
 
-  --color-secondary: #515f74;
+  --color-secondary: #94a3b8;
   --color-secondary-container: #d5e3fc;
   --color-on-secondary: #ffffff;
   --color-on-secondary-container: #57657a;
@@ -20,30 +20,30 @@
   --color-on-secondary-fixed: #0d1c2e;
   --color-on-secondary-fixed-variant: #3a485b;
 
-  --color-surface: #f7f9fb;
-  --color-surface-dim: #d8dadc;
-  --color-surface-bright: #f7f9fb;
-  --color-surface-variant: #e0e3e5;
-  --color-surface-container-lowest: #ffffff;
-  --color-surface-container-low: #f2f4f6;
-  --color-surface-container: #eceef0;
-  --color-surface-container-high: #e6e8ea;
-  --color-surface-container-highest: #e0e3e5;
+  --color-surface: #0f172a;
+  --color-surface-dim: #020617;
+  --color-surface-bright: #1e293b;
+  --color-surface-variant: #334155;
+  --color-surface-container-lowest: #111827;
+  --color-surface-container-low: #1e293b;
+  --color-surface-container: #263449;
+  --color-surface-container-high: #334155;
+  --color-surface-container-highest: #475569;
 
-  --color-on-surface: #191c1e;
-  --color-on-surface-variant: #434655;
+  --color-on-surface: #f8fafc;
+  --color-on-surface-variant: #cbd5e1;
   --color-inverse-surface: #2d3133;
   --color-inverse-on-surface: #eff1f3;
 
-  --color-outline: #737686;
-  --color-outline-variant: #c3c6d7;
+  --color-outline: #64748b;
+  --color-outline-variant: #475569;
   --color-surface-tint: #0053db;
 
-  --color-background: #f7f9fb;
-  --color-on-background: #191c1e;
+  --color-background: #0f172a;
+  --color-on-background: #f8fafc;
 
-  --color-workspace-bg: #F1F5F9;
-  --color-border-subtle: #E2E8F0;
+  --color-workspace-bg: #0f172a;
+  --color-border-subtle: #334155;
 
   --color-success: #10B981;
   --color-warning: #F59E0B;
@@ -134,11 +134,11 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: #475569;
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: #64748b;
 }
 
 /* Material Symbols alignment helper */

@@ -34,9 +34,12 @@
         :file-name="activeFileName"
         :step="conversionStep"
         :progress="conversionProgress"
+        :page-progress="pageProgress"
         :error-message="conversionError"
+        :can-retry="!!activeConversionUuid"
         @completed="onProcessingCompleted"
         @cancel="cancelConversion"
+        @retry="retryConversion"
       />
 
       <!-- View: Editor Split-View -->
@@ -44,6 +47,7 @@
         v-else-if="currentView === 'editor'"
         :key="activeProjectId"
         :project-title="activeProjectTitle"
+        :project-uuid="activeProject?.uuid"
         :xml-content="activeProjectXml"
         :source-image-url="activeSourceImageUrl"
         :source-pdf-url="activeSourcePdfUrl"
@@ -84,7 +88,6 @@ import LibraryView from './Components/LibraryView.vue';
 import SettingsView from './Components/SettingsView.vue';
 import ExportModal from './Components/ExportModal.vue';
 import { projectStore, type ProjectItem } from './Services/ProjectStore';
-import { OmrTranscriptionService } from './Services/OmrTranscriptionService';
 
 // Navigation state
 const currentView = ref<'dashboard' | 'processing' | 'editor' | 'library' | 'settings'>('dashboard');
@@ -97,12 +100,14 @@ const goldenXmlCache = ref('');
 // Real OMR Progress state
 const conversionStep = ref(1);
 const conversionProgress = ref(10);
+const pageProgress = ref<{ current_page: number | null; total_pages: number; processed_pages: number } | null>(null);
 const conversionError = ref<string | null>(null);
+const activeConversionUuid = ref<string | null>(null);
 
 const activeProject = computed(() => projectStore.activeProject);
 const activeProjectId = computed(() => activeProject.value?.id || 'p_001');
 const activeProjectTitle = computed(() => activeProject.value?.title || '001 Hỡi Thánh Vương, Kíp Ngự Lai');
-const activeProjectXml = computed(() => activeProject.value?.xmlContent || goldenXmlCache.value);
+const activeProjectXml = computed(() => activeProject.value ? (activeProject.value.xmlContent || '') : goldenXmlCache.value);
 const activeSourceImageUrl = computed(() => activeProject.value?.sourceImageUrl);
 const activeSourcePdfUrl = computed(() => activeProject.value?.sourcePdfUrl);
 
@@ -140,7 +145,75 @@ function navigateView(view: string) {
 
 function cancelConversion() {
   conversionError.value = null;
+  pageProgress.value = null;
   currentView.value = 'dashboard';
+}
+
+async function waitForConversion(uuid: string): Promise<any> {
+  let backendProject: any = null;
+  for (let attempt = 0; attempt < 3600; attempt += 1) {
+    const statusResponse = await fetch(`/api/conversions/${uuid}`, { cache: 'no-store' });
+    if (!statusResponse.ok) throw new Error(`Không đọc được tiến độ OMR (${statusResponse.status}).`);
+    backendProject = (await statusResponse.json()).data;
+    conversionProgress.value = Number(backendProject.progress || 0);
+    const step = String(backendProject.current_step || 'queued');
+    conversionStep.value = step === 'queued' || step === 'preparing_pages' ? 1
+      : step === 'recognizing_score' ? 2
+      : step === 'recognizing_lyrics' ? 3
+      : step === 'validating_artifacts' ? 4 : 5;
+    if (step === 'recognizing_score') {
+      const pageResponse = await fetch(`/api/conversions/${uuid}/page-progress`, { cache: 'no-store' });
+      if (pageResponse.ok) {
+        const current = (await pageResponse.json()).data;
+        pageProgress.value = current;
+        conversionProgress.value = Number(current.progress || 0);
+      }
+    }
+    if (backendProject.status === 'FAILED') {
+      throw new Error(backendProject.error_message || 'OMR thất bại. Có thể thử lại từ checkpoint.');
+    }
+    if (backendProject.status === 'NEEDS_REVIEW' || backendProject.status === 'READY') return backendProject;
+    await new Promise(resolve => setTimeout(resolve, 2000));
+  }
+  throw new Error('OMR vẫn đang chạy nền. Dự án được giữ lại và có thể mở lại từ Thư viện.');
+}
+
+async function openCompletedConversion(uuid: string, backendProject: any, title: string, filename: string, imgUrl?: string, pdfUrl?: string): Promise<void> {
+  const xmlRes = await fetch(`/api/conversions/${uuid}/musicxml`);
+  if (!xmlRes.ok) throw new Error('Backend không cung cấp MusicXML đã kiểm định.');
+  const realXml = await xmlRes.text();
+  if (!realXml || !realXml.trim().startsWith('<?xml') || realXml.length <= 200) {
+    throw new Error('MusicXML trả về không hợp lệ; không tạo bản nhạc thay thế giả.');
+  }
+  const existing = projectStore.projects.find(project => project.uuid === uuid);
+  const newProj = existing || projectStore.createProject(title, filename, imgUrl, pdfUrl, realXml, uuid);
+  await projectStore.updateProject(newProj.id, {
+    xmlContent: realXml,
+    status: backendProject.status === 'READY' ? 'READY' : 'NEEDS_REVIEW',
+  });
+  conversionStep.value = 5;
+  conversionProgress.value = 100;
+  projectStore.activeProjectId.value = newProj.id;
+  setTimeout(() => { currentView.value = 'editor'; }, 350);
+}
+
+async function retryConversion(): Promise<void> {
+  const uuid = activeConversionUuid.value;
+  if (!uuid) return;
+  conversionError.value = null;
+  pageProgress.value = null;
+  conversionProgress.value = 5;
+  conversionStep.value = 1;
+  try {
+    const retryResponse = await fetch(`/api/conversions/${uuid}/retry`, { method: 'POST' });
+    const retryPayload = await retryResponse.json();
+    if (!retryResponse.ok) throw new Error(retryPayload?.message || 'Không thể xếp hàng thử lại.');
+    const backendProject = await waitForConversion(uuid);
+    await openCompletedConversion(uuid, backendProject, activeFileName.value.replace(/\.[^/.]+$/, ''), activeFileName.value);
+  } catch (error) {
+    conversionProgress.value = 0;
+    conversionError.value = error instanceof Error ? error.message : 'Thử lại OMR thất bại.';
+  }
 }
 
 async function startConversion(file: File, config: any) {
@@ -186,71 +259,37 @@ async function startConversion(file: File, config: any) {
   conversionStep.value = 1;
   conversionProgress.value = 15;
   conversionError.value = null;
+  pageProgress.value = null;
+  activeConversionUuid.value = null;
   currentView.value = 'processing';
 
   const formData = new FormData();
   formData.append('file', file);
   formData.append('language', config?.langVietnamese && config?.langEnglish ? 'vie+eng' : (config?.langVietnamese ? 'vie' : 'eng'));
-
-  // Progress ticker while waiting for real OMR
-  let stepTimer = 0;
-  const progressTimer = setInterval(() => {
-    stepTimer += 1;
-    if (stepTimer === 1) {
-      conversionStep.value = 2;
-      conversionProgress.value = 35;
-    } else if (stepTimer === 3) {
-      conversionStep.value = 3;
-      conversionProgress.value = 65;
-    } else if (stepTimer === 6) {
-      conversionStep.value = 4;
-      conversionProgress.value = 85;
-    } else if (stepTimer > 8 && conversionProgress.value < 95) {
-      conversionProgress.value += 2;
-    }
-  }, 1000);
+  formData.append('detect_lyrics', config?.recognizeLyrics === false ? '0' : '1');
+  formData.append('detect_chords', config?.recognizeChords === false ? '0' : '1');
 
   try {
-    const res = await fetch('/api/conversions', {
+    const response = await fetch('/api/conversions', {
       method: 'POST',
       body: formData,
-    }).then(r => r.json());
-
-    clearInterval(progressTimer);
-    conversionStep.value = 5;
-    conversionProgress.value = 100;
-
-    const uuid = res?.data?.uuid || res?.uuid;
-    if (uuid) {
-      const xmlRes = await fetch(`/api/conversions/${uuid}/musicxml`);
-      if (xmlRes && xmlRes.ok) {
-        const realXml = await xmlRes.text();
-        if (realXml && realXml.trim().startsWith('<?xml') && realXml.length > 200) {
-          const newProj = projectStore.createProject(projectTitle, file.name, imgUrl, pdfUrl, realXml, uuid);
-          projectStore.activeProjectId.value = newProj.id;
-          setTimeout(() => {
-            currentView.value = 'editor';
-          }, 350);
-          return;
-        }
-      }
+    });
+    const res = await response.json();
+    if (!response.ok) {
+      throw new Error(res?.message || res?.error || `Upload failed (${response.status})`);
     }
 
-    // Fallback if backend returned without MusicXML
-    const transcribedXml = OmrTranscriptionService.transcribeFromFile(file.name);
-    const newProj = projectStore.createProject(projectTitle, file.name, imgUrl, pdfUrl, transcribedXml);
-    projectStore.activeProjectId.value = newProj.id;
-    setTimeout(() => {
-      currentView.value = 'editor';
-    }, 350);
+    const uuid = res?.data?.uuid || res?.uuid;
+    if (!uuid) {
+      throw new Error(res?.data?.error_message || 'OMR không tạo được MusicXML đáng tin cậy.');
+    }
+    activeConversionUuid.value = uuid;
+
+    const backendProject = await waitForConversion(uuid);
+    await openCompletedConversion(uuid, backendProject, projectTitle, file.name, imgUrl, pdfUrl);
   } catch (err: any) {
-    clearInterval(progressTimer);
-    const transcribedXml = OmrTranscriptionService.transcribeFromFile(file.name);
-    const newProj = projectStore.createProject(projectTitle, file.name, imgUrl, pdfUrl, transcribedXml);
-    projectStore.activeProjectId.value = newProj.id;
-    setTimeout(() => {
-      currentView.value = 'editor';
-    }, 350);
+    conversionProgress.value = 0;
+    conversionError.value = err instanceof Error ? err.message : 'Chuyển đổi OMR thất bại.';
   }
 }
 
@@ -258,8 +297,33 @@ function onProcessingCompleted() {
   currentView.value = 'editor';
 }
 
-function openProject(project: ProjectItem) {
+async function openProject(project: ProjectItem) {
   projectStore.activeProjectId.value = project.id;
+  activeFileName.value = project.sourceFilename || project.title;
+  activeConversionUuid.value = project.uuid || null;
+
+  if (project.uuid && (project.status === 'READY' || project.status === 'NEEDS_REVIEW')) {
+    try {
+      const response = await fetch(`/api/conversions/${project.uuid}/musicxml`, { cache: 'no-store' });
+      if (!response.ok) throw new Error(`MusicXML chưa sẵn sàng (${response.status}).`);
+      const xmlContent = await response.text();
+      if (!xmlContent.trim().startsWith('<?xml')) throw new Error('MusicXML của dự án không hợp lệ.');
+      await projectStore.updateProject(project.id, { xmlContent });
+      currentView.value = 'editor';
+      return;
+    } catch (error) {
+      conversionError.value = error instanceof Error ? error.message : 'Không tải được MusicXML của dự án.';
+      currentView.value = 'processing';
+      return;
+    }
+  }
+
+  if (!project.xmlContent) {
+    conversionProgress.value = project.status === 'FAILED' ? 0 : 5;
+    conversionError.value = project.status === 'FAILED' ? 'Lần nhận diện trước đã thất bại. Bạn có thể thử lại từ checkpoint.' : null;
+    currentView.value = 'processing';
+    return;
+  }
   currentView.value = 'editor';
 }
 

@@ -119,15 +119,15 @@
                 <h3 class="font-body-md text-sm font-semibold text-on-surface truncate group-hover:text-primary transition-colors">
                   {{ project.title }}
                 </h3>
-                <p class="font-label-sm text-xs text-secondary mt-1">{{ project.composer || 'Felice de Giardini' }} • {{ project.date }}</p>
+                <p class="font-label-sm text-xs text-secondary mt-1">{{ project.composer || 'Chưa rõ tác giả' }} • {{ project.date }}</p>
                 <div class="mt-2 flex items-center gap-2">
                   <span
                     class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold"
-                    :class="project.status === 'READY' ? 'bg-success/15 text-success' : 'bg-warning/15 text-warning'"
+                    :class="project.status === 'READY' ? 'bg-success/15 text-success' : (project.status === 'FAILED' ? 'bg-error/15 text-error' : 'bg-warning/15 text-warning')"
                   >
                     {{ project.status }}
                   </span>
-                  <span class="text-[10px] text-secondary">{{ project.verses }} Verses</span>
+                  <span class="text-[10px] text-secondary">{{ project.verses }} phiên khúc</span>
                 </div>
               </div>
             </div>
@@ -149,11 +149,12 @@
               <label class="block font-label-sm text-xs text-on-surface font-semibold mb-2">OMR Engine</label>
               <select
                 v-model="config.omrEngine"
+                disabled
                 class="w-full border border-border-subtle rounded-lg bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:ring-1 focus:ring-primary outline-none"
               >
-                <option value="audiveris">Audiveris (Khuyến nghị cho Thánh ca & Piano)</option>
-                <option value="oemer">Oemer (Deep Learning)</option>
+                <option value="audiveris">Audiveris 5.11 (đang hoạt động)</option>
               </select>
+              <p class="font-mono-label text-xs text-secondary mt-2">Engine học sâu chỉ được mở khi đã cài model và vượt bộ kiểm định đối chứng.</p>
             </div>
 
             <!-- OCR Language -->
@@ -183,6 +184,27 @@
 
             <!-- Feature Toggles -->
             <div class="space-y-4">
+              <div class="grid grid-cols-2 gap-2" role="group" aria-label="Chế độ nhận diện">
+                <button
+                  type="button"
+                  class="rounded-lg border px-3 py-2 text-xs font-bold transition-colors"
+                  :class="config.recognizeLyrics ? 'border-primary bg-primary/15 text-primary' : 'border-border-subtle bg-surface-container text-secondary'"
+                  @click="config.recognizeLyrics = true"
+                >
+                  Nốt + lời
+                </button>
+                <button
+                  type="button"
+                  class="rounded-lg border px-3 py-2 text-xs font-bold transition-colors"
+                  :class="!config.recognizeLyrics ? 'border-primary bg-primary/15 text-primary' : 'border-border-subtle bg-surface-container text-secondary'"
+                  @click="selectNotationOnly"
+                >
+                  Chỉ nốt nhạc
+                </button>
+              </div>
+              <p v-if="!config.recognizeLyrics" class="text-xs text-primary leading-relaxed">
+                Chỉ giữ nốt, nghỉ, khóa, nhịp và liên kết nhạc. Bỏ OCR lời, hợp âm, dynamics, pedal và ornament.
+              </p>
               <div class="flex items-center justify-between">
                 <div>
                   <p class="font-label-sm text-sm text-on-surface font-semibold">Nhận dạng lời nhạc (Lyrics)</p>
@@ -203,10 +225,11 @@
                   <p class="font-label-sm text-sm text-on-surface font-semibold">Nhận dạng hợp âm (Chords)</p>
                   <p class="font-mono-label text-xs text-secondary mt-0.5">Phát hiện ký hiệu hợp âm</p>
                 </div>
-                <label class="relative inline-flex items-center cursor-pointer">
+                <label class="relative inline-flex items-center" :class="config.recognizeLyrics ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'">
                   <input
                     v-model="config.recognizeChords"
                     type="checkbox"
+                    :disabled="!config.recognizeLyrics"
                     class="sr-only peer"
                   />
                   <div class="w-9 h-5 bg-surface-container-high peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
@@ -232,7 +255,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue';
+import { ref, reactive, onMounted, watch } from 'vue';
 import { projectStore, type ProjectItem } from '../Services/ProjectStore';
 
 const emit = defineEmits<{
@@ -253,6 +276,24 @@ const config = reactive({
   langEnglish: true,
   recognizeLyrics: true,
   recognizeChords: true,
+});
+const CONFIG_STORAGE_KEY = 'sheettools_omr_config_v1';
+
+onMounted(() => {
+  try {
+    const saved = JSON.parse(localStorage.getItem(CONFIG_STORAGE_KEY) || '{}');
+    for (const key of ['langVietnamese', 'langEnglish', 'recognizeLyrics', 'recognizeChords'] as const) {
+      if (typeof saved[key] === 'boolean') config[key] = saved[key];
+    }
+    config.omrEngine = 'audiveris';
+    if (!config.recognizeLyrics) config.recognizeChords = false;
+  } catch {
+    localStorage.removeItem(CONFIG_STORAGE_KEY);
+  }
+});
+
+watch(() => config.recognizeLyrics, (enabled) => {
+  if (!enabled) config.recognizeChords = false;
 });
 
 function triggerFileInput() {
@@ -283,6 +324,11 @@ function onStartConvert() {
   emit('start-conversion', selectedFile.value, { ...config, categorySlug: targetCategorySlug.value });
 }
 
+function selectNotationOnly() {
+  config.recognizeLyrics = false;
+  config.recognizeChords = false;
+}
+
 function openRecentProject(project: ProjectItem) {
   projectStore.activeProjectId.value = project.id;
   emit('open-project', project);
@@ -295,6 +341,13 @@ function formatFileSize(bytes: number): string {
 }
 
 function saveConfig() {
+  localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify({
+    omrEngine: 'audiveris',
+    langVietnamese: config.langVietnamese,
+    langEnglish: config.langEnglish,
+    recognizeLyrics: config.recognizeLyrics,
+    recognizeChords: config.recognizeChords,
+  }));
   savedNotice.value = true;
   setTimeout(() => {
     savedNotice.value = false;

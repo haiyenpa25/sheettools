@@ -45,19 +45,39 @@ class ExportService
         $jsonStr = implode("\n", $output);
         $res = json_decode($jsonStr, true);
 
-        return is_array($res) ? $res : ['isValid' => ($exitCode === 0), 'errors' => [], 'warnings' => []];
+        if (is_array($res)) {
+            return $res;
+        }
+
+        $doc = new \DOMDocument();
+        $previous = libxml_use_internal_errors(true);
+        $loaded = $doc->load($xmlPath, LIBXML_NONET);
+        $errors = array_map(static fn(\LibXMLError $error): string => trim($error->message), libxml_get_errors());
+        libxml_clear_errors();
+        libxml_use_internal_errors($previous);
+        $isScore = $loaded && $doc->documentElement?->localName === 'score-partwise';
+        return [
+            'isValid' => $isScore,
+            'errors' => $isScore ? [] : ($errors ?: ['Root element must be score-partwise']),
+            'warnings' => ['MusicXML schema validator unavailable; structural validation only.'],
+        ];
     }
 
     /**
      * Xuất tệp MusicXML theo định dạng yêu cầu (.xml, .musicxml, .mxl)
      */
-    public function export(string $uuid, string $format = 'musicxml'): ?string
+    public function export(string $uuid, string $format = 'musicxml', string $variant = 'full'): ?string
     {
         $curPath = $this->storageService->getCurrentMusicXmlPath($uuid);
         if (!file_exists($curPath)) {
             $curPath = $this->storageService->getRawMusicXmlPath($uuid);
         }
         if (!file_exists($curPath) || filesize($curPath) < 50) return null;
+
+        $variant = strtolower($variant);
+        if (!in_array($variant, ['full', 'notation', 'lyrics'], true)) {
+            return null;
+        }
 
         // Kiểm tra tính hợp lệ của XML trước khi xuất
         $doc = new \DOMDocument();
@@ -70,40 +90,78 @@ class ExportService
             mkdir($exportDir, 0755, true);
         }
 
-        $baseName = 'score_export';
+        if ($variant === 'lyrics') {
+            if (!in_array(strtolower($format), ['txt', 'text'], true)) {
+                return null;
+            }
+            $target = $exportDir . DIRECTORY_SEPARATOR . 'lyrics_only.txt';
+            $content = $this->extractLyricsText($doc);
+            return file_put_contents($target, $content) !== false ? $target : null;
+        }
+
+        if ($variant === 'notation') {
+            $xpath = new \DOMXPath($doc);
+            $lyrics = $xpath->query('//*[local-name()="lyric"]');
+            if ($lyrics !== false) {
+                foreach (iterator_to_array($lyrics) as $lyric) {
+                    $lyric->parentNode?->removeChild($lyric);
+                }
+            }
+        }
+
+        $sourcePath = $curPath;
+        $baseName = $variant === 'notation' ? 'score_notation_only' : 'score_full';
+        if ($variant === 'notation') {
+            $sourcePath = $exportDir . DIRECTORY_SEPARATOR . '_notation_source.musicxml';
+            if ($doc->save($sourcePath) === false) {
+                return null;
+            }
+        }
 
         switch (strtolower($format)) {
             case 'xml':
                 $target = $exportDir . DIRECTORY_SEPARATOR . "{$baseName}.xml";
-                copy($curPath, $target);
+                copy($sourcePath, $target);
                 return $target;
 
             case 'musicxml':
                 $target = $exportDir . DIRECTORY_SEPARATOR . "{$baseName}.musicxml";
-                copy($curPath, $target);
+                copy($sourcePath, $target);
                 return $target;
 
             case 'mxl':
                 $targetMxl = $exportDir . DIRECTORY_SEPARATOR . "{$baseName}.mxl";
-                if ($this->packageMxl($curPath, $targetMxl)) {
+                if ($this->packageMxl($sourcePath, $targetMxl)) {
                     return $targetMxl;
                 }
                 return null;
 
-            case 'mscx':
-                $targetMscx = $exportDir . DIRECTORY_SEPARATOR . "{$baseName}.mscx";
-                $exporterPy = dirname(__DIR__, 2) . '/workers/xml_tools/musescore_exporter.py';
-                $cmd = sprintf('python %s --input %s --output %s --format mscx 2>&1', escapeshellarg($exporterPy), escapeshellarg($curPath), escapeshellarg($targetMscx));
-                @exec($cmd);
-                if (file_exists($targetMscx) && filesize($targetMscx) > 50) {
-                    return $targetMscx;
-                }
-                copy($curPath, $targetMscx);
-                return $targetMscx;
-
             default:
-                return $curPath;
+                return null;
         }
+    }
+
+    /** Tạo bản lời thuần văn bản, tách rõ từng verse theo thứ tự nốt. */
+    private function extractLyricsText(\DOMDocument $doc): string
+    {
+        $xpath = new \DOMXPath($doc);
+        $verses = [];
+        $lyrics = $xpath->query('//*[local-name()="lyric"]');
+        if ($lyrics !== false) {
+            foreach ($lyrics as $lyric) {
+                if (!$lyric instanceof \DOMElement) continue;
+                $number = trim($lyric->getAttribute('number')) ?: '1';
+                $textNode = $xpath->query('./*[local-name()="text"]', $lyric)?->item(0);
+                $text = trim($textNode?->textContent ?? '');
+                if ($text !== '') $verses[$number][] = $text;
+            }
+        }
+        uksort($verses, 'strnatcasecmp');
+        $sections = [];
+        foreach ($verses as $number => $syllables) {
+            $sections[] = "VERSE {$number}\n" . implode(' ', $syllables);
+        }
+        return implode("\n\n", $sections) . "\n";
     }
 
     /**
@@ -127,9 +185,11 @@ class ExportService
         $containerXml = '<?xml version="1.0" encoding="UTF-8"?>
 <container>
   <rootfiles>
-    <rootfile full-path="score.xml"/>
+    <rootfile full-path="score.xml" media-type="application/vnd.recordare.musicxml+xml"/>
   </rootfiles>
 </container>';
+        $zip->addFromString('mimetype', 'application/vnd.recordare.musicxml');
+        $zip->setCompressionName('mimetype', ZipArchive::CM_STORE);
         $zip->addEmptyDir('META-INF');
         $zip->addFromString('META-INF/container.xml', $containerXml);
 

@@ -22,6 +22,16 @@ class StorageService
         return $this->storageRoot . DIRECTORY_SEPARATOR . 'projects';
     }
 
+    public function getTrashRoot(): string
+    {
+        return $this->storageRoot . DIRECTORY_SEPARATOR . 'trash';
+    }
+
+    public function getTrashedProjectDir(string $uuid): string
+    {
+        return $this->getTrashRoot() . DIRECTORY_SEPARATOR . $uuid;
+    }
+
     public function getProjectDir(string $uuid): string
     {
         return $this->getProjectsRoot() . DIRECTORY_SEPARATOR . $uuid;
@@ -42,6 +52,8 @@ class StorageService
             'pages' => $base . DIRECTORY_SEPARATOR . 'pages',
             'omr' => $base . DIRECTORY_SEPARATOR . 'omr',
             'musicxml' => $base . DIRECTORY_SEPARATOR . 'musicxml',
+            'ocr' => $base . DIRECTORY_SEPARATOR . 'ocr',
+            'document' => $base . DIRECTORY_SEPARATOR . 'document',
             'logs' => $base . DIRECTORY_SEPARATOR . 'logs',
         ];
 
@@ -54,14 +66,67 @@ class StorageService
         return $dirs;
     }
 
-    public function getSourcePath(string $uuid, string $filename): string
+    public function getSourcePath(string $uuid, string $extension): ?string
     {
-        return $this->getProjectDir($uuid) . DIRECTORY_SEPARATOR . 'source' . DIRECTORY_SEPARATOR . $filename;
+        $extension = strtolower(ltrim($extension, '.'));
+        if (!in_array($extension, ['pdf', 'png', 'jpg', 'jpeg', 'xml', 'musicxml'], true)) {
+            return null;
+        }
+        $sourceDir = $this->getProjectDir($uuid) . DIRECTORY_SEPARATOR . 'source';
+        $path = $sourceDir . DIRECTORY_SEPARATOR . 'original.' . $extension;
+        $realSourceDir = realpath($sourceDir);
+        $realTargetDir = realpath(dirname($path));
+        if ($realSourceDir === false || $realTargetDir === false || strcasecmp($realTargetDir, $realSourceDir) !== 0) {
+            throw new \RuntimeException('Invalid project source path.');
+        }
+        return $path;
+    }
+
+    public function resolveSourcePath(string $uuid, string $filename, string $sourceType = ''): ?string
+    {
+        $sourceDir = $this->getProjectDir($uuid) . DIRECTORY_SEPARATOR . 'source';
+        $safeFilename = basename($filename);
+        $exact = $sourceDir . DIRECTORY_SEPARATOR . $safeFilename;
+        if (is_file($exact)) {
+            return $exact;
+        }
+
+        $files = array_values(array_filter(
+            glob($sourceDir . DIRECTORY_SEPARATOR . '*') ?: [],
+            static fn(string $path): bool => is_file($path)
+        ));
+        if ($sourceType !== '') {
+            $canonical = $this->getSourcePath($uuid, $sourceType);
+            if ($canonical !== null && is_file($canonical)) {
+                return $canonical;
+            }
+            $typed = array_values(array_filter(
+                $files,
+                static fn(string $path): bool => strtolower(pathinfo($path, PATHINFO_EXTENSION)) === strtolower($sourceType)
+            ));
+            if (count($typed) === 1) {
+                return $typed[0];
+            }
+            $files = $typed ?: $files;
+        }
+
+        $requestedStem = pathinfo($safeFilename, PATHINFO_FILENAME);
+        foreach ($files as $path) {
+            if (pathinfo($path, PATHINFO_FILENAME) === $requestedStem) {
+                return $path;
+            }
+        }
+        return count($files) === 1 ? $files[0] : null;
     }
 
     public function getPagesDir(string $uuid): string
     {
         return $this->getProjectDir($uuid) . DIRECTORY_SEPARATOR . 'pages';
+    }
+
+    public function getPageProgressPath(string $uuid): string
+    {
+        return $this->getProjectDir($uuid) . DIRECTORY_SEPARATOR . 'omr_out' . DIRECTORY_SEPARATOR . 'page_progress.json';
     }
 
     public function getOmrPath(string $uuid): string
@@ -79,9 +144,24 @@ class StorageService
         return $this->getProjectDir($uuid) . DIRECTORY_SEPARATOR . 'musicxml' . DIRECTORY_SEPARATOR . 'current.musicxml';
     }
 
+    public function getNormalizedMusicXmlPath(string $uuid): string
+    {
+        return $this->getProjectDir($uuid) . DIRECTORY_SEPARATOR . 'musicxml' . DIRECTORY_SEPARATOR . 'normalized.musicxml';
+    }
+
     public function getFinalMusicXmlPath(string $uuid): string
     {
         return $this->getProjectDir($uuid) . DIRECTORY_SEPARATOR . 'musicxml' . DIRECTORY_SEPARATOR . 'final.musicxml';
+    }
+
+    public function getLyricsArtifactPath(string $uuid): string
+    {
+        return $this->getProjectDir($uuid) . DIRECTORY_SEPARATOR . 'ocr' . DIRECTORY_SEPARATOR . 'lyrics.json';
+    }
+
+    public function getDocumentArtifactPath(string $uuid): string
+    {
+        return $this->getProjectDir($uuid) . DIRECTORY_SEPARATOR . 'document' . DIRECTORY_SEPARATOR . 'document.json';
     }
 
     public function getLogPath(string $uuid, string $logName = 'audiveris'): string
@@ -98,7 +178,9 @@ class StorageService
         $rawPath = $this->getRawMusicXmlPath($uuid);
         $curPath = $this->getCurrentMusicXmlPath($uuid);
 
-        file_put_contents($rawPath, $content);
+        if (!file_exists($rawPath)) {
+            file_put_contents($rawPath, $content);
+        }
         if (!file_exists($curPath)) {
             file_put_contents($curPath, $content);
         }

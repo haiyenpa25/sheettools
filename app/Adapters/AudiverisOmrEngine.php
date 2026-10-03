@@ -42,6 +42,7 @@ class AudiverisOmrEngine implements OmrEngineInterface
 
         $logPath        = $this->storageService->getLogPath($uuid, 'audiveris');
         $canonicalXmlPath = $this->storageService->getRawMusicXmlPath($uuid);
+        $normalizedXmlPath = $this->storageService->getNormalizedMusicXmlPath($uuid);
         $canonicalOmrPath = $this->storageService->getOmrPath($uuid);
 
         $outDir = $this->storageService->getProjectDir($uuid) . DIRECTORY_SEPARATOR . 'omr_out';
@@ -58,15 +59,20 @@ class AudiverisOmrEngine implements OmrEngineInterface
 
         // Tìm Python binary
         $pythonBin = $this->config['python_bin'] ?? 'python';
+        $retryPageOption = $input->retryPageIndex === null ? '' : '--retry-page-index ' . $input->retryPageIndex;
 
         // Xây dựng lệnh gọi Python worker
         $cmd = sprintf(
-            '%s %s --input %s --output %s --audiveris %s 2>&1',
+            '%s %s --input %s --output %s --pages-dir %s --audiveris %s %s %s %s 2>&1',
             escapeshellarg($pythonBin),
             escapeshellarg($workerScript),
             escapeshellarg($input->sourceFilePath),
             escapeshellarg($outDir),
-            escapeshellarg($audiverisExe)
+            escapeshellarg($this->storageService->getPagesDir($uuid)),
+            escapeshellarg($audiverisExe),
+            $input->detectLyrics ? '' : '--notation-only',
+            $input->detectChords ? '' : '--no-chords',
+            $retryPageOption
         );
 
         $output   = [];
@@ -110,18 +116,21 @@ class AudiverisOmrEngine implements OmrEngineInterface
         if ($jsonResult && !empty($jsonResult['xml_path']) && file_exists($jsonResult['xml_path'])) {
             $foundMusicXml = $jsonResult['xml_path'];
         }
+        if ($jsonResult && !empty($jsonResult['raw_xml_path']) && file_exists($jsonResult['raw_xml_path']) && !file_exists($canonicalXmlPath)) {
+            copy($jsonResult['raw_xml_path'], $canonicalXmlPath);
+        }
+        if ($jsonResult && !empty($jsonResult['lyrics_artifact_path']) && file_exists($jsonResult['lyrics_artifact_path'])) {
+            copy($jsonResult['lyrics_artifact_path'], $this->storageService->getLyricsArtifactPath($uuid));
+        }
+        if ($jsonResult && !empty($jsonResult['document_artifact_path']) && file_exists($jsonResult['document_artifact_path'])) {
+            copy($jsonResult['document_artifact_path'], $this->storageService->getDocumentArtifactPath($uuid));
+        }
         if ($jsonResult && !($jsonResult['success'] ?? false)) {
             $warnings[] = $jsonResult['error'] ?? 'Unknown OMR error';
         }
 
-        // Ưu tiên 1: Tệp đã được phục hồi hoàn chỉnh và inject lời tiếng Việt (score_healed.xml)
-        $healedCandidate = $outDir . DIRECTORY_SEPARATOR . 'score_healed.xml';
-        if (file_exists($healedCandidate) && filesize($healedCandidate) > 50) {
-            $foundMusicXml = $healedCandidate;
-        }
-
-        // Ưu tiên 2: Quét thư mục output nếu chưa tìm thấy, ưu tiên .xml/.musicxml trước .mxl
-        if (!$foundMusicXml && is_dir($outDir)) {
+        // Always inventory artifacts: source.omr is independent from MusicXML.
+        if (is_dir($outDir)) {
             $candidatesXml = [];
             $candidatesMxl = [];
             $iterator = new RecursiveIteratorIterator(
@@ -141,14 +150,14 @@ class AudiverisOmrEngine implements OmrEngineInterface
                     }
                 }
             }
-            if (!empty($candidatesXml)) {
+            if (!$foundMusicXml && !empty($candidatesXml)) {
                 $foundMusicXml = $candidatesXml[0];
-            } elseif (!empty($candidatesMxl)) {
+            } elseif (!$foundMusicXml && !empty($candidatesMxl)) {
                 $foundMusicXml = $candidatesMxl[0];
             }
         }
 
-        if ($foundOmr && file_exists($foundOmr)) {
+        if ($foundOmr && file_exists($foundOmr) && !file_exists($canonicalOmrPath)) {
             copy($foundOmr, $canonicalOmrPath);
         }
 
@@ -165,7 +174,7 @@ class AudiverisOmrEngine implements OmrEngineInterface
                                 (str_ends_with($filename, '.xml') || str_ends_with($filename, '.musicxml'))) {
                                 $content = $zip->getFromIndex($i);
                                 if ($content !== false && strlen($content) > 50) {
-                                    file_put_contents($canonicalXmlPath, $content);
+                                    file_put_contents($normalizedXmlPath, $content);
                                     $xmlExtracted = true;
                                     break;
                                 }
@@ -176,25 +185,23 @@ class AudiverisOmrEngine implements OmrEngineInterface
                 }
 
                 // Fallback giải nén qua Python zipfile nếu ZipArchive không khả dụng
-                if (!$xmlExtracted || !file_exists($canonicalXmlPath) || filesize($canonicalXmlPath) < 50) {
-                    $pyCmd = sprintf(
-                        'python -c "import zipfile, os; z=zipfile.ZipFile(r\'%s\'); [open(r\'%s\', \'wb\').write(z.read(n)) for n in z.namelist() if n.endswith(\'.xml\') and \'META-INF\' not in n]" 2>&1',
-                        $foundMusicXml,
-                        $canonicalXmlPath
-                    );
-                    @exec($pyCmd);
+                if (!$xmlExtracted || !file_exists($normalizedXmlPath) || filesize($normalizedXmlPath) < 50) {
+                    $warnings[] = 'Unable to read the compressed MusicXML archive safely (ZipArchive is required).';
                 }
             } else {
-                copy($foundMusicXml, $canonicalXmlPath);
+                copy($foundMusicXml, $normalizedXmlPath);
             }
         }
 
+        if (!file_exists($canonicalXmlPath) && file_exists($normalizedXmlPath)) {
+            copy($normalizedXmlPath, $canonicalXmlPath);
+        }
         $hasValidXml = file_exists($canonicalXmlPath) && filesize($canonicalXmlPath) > 50;
-        $success     = $hasValidXml;
+        $success     = $hasValidXml && $exitCode === 0 && is_array($jsonResult) && !empty($jsonResult['success']);
 
         return new OmrResultDto(
             success: $success,
-            musicXmlPath: $hasValidXml ? $canonicalXmlPath : null,
+            musicXmlPath: file_exists($normalizedXmlPath) ? $normalizedXmlPath : ($hasValidXml ? $canonicalXmlPath : null),
             omrPath: file_exists($canonicalOmrPath) ? $canonicalOmrPath : null,
             generatedArtifacts: $foundArtifacts,
             exitCode: $exitCode,
@@ -203,4 +210,3 @@ class AudiverisOmrEngine implements OmrEngineInterface
         );
     }
 }
-

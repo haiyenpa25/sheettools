@@ -1,0 +1,10 @@
+Pillow==11.3.0
+lxml==6.0.1
+music21==9.7.1
+numpy==2.2.6
+opencv-python-headless==4.12.0.88
+pypdfium2==4.30.0
+pytesseract==0.3.13
+rapidocr-onnxruntime==1.4.4
+xmlschema==4.1.0
+

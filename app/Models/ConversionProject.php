@@ -12,10 +12,16 @@ class ConversionProject
     public string $id;
     public string $uuid;
     public string $title;
-    public string $status; // UPLOADED, PROCESSING, NEEDS_REVIEW, READY, FAILED
+    public string $composer;
+    public string $categorySlug;
+    public string $categoryName;
+    public string $songNumber;
+    public string $status; // UPLOADED, QUEUED, PROCESSING, NEEDS_REVIEW, READY, FAILED
     public string $sourceFilename;
     public string $sourceType; // pdf, png, jpg
     public string $language; // vie+eng
+    public bool $detectLyrics;
+    public bool $detectChords;
     public int $progress; // 0..100
     public string $currentStep; // preparing, recognizing_score, recognizing_lyrics, creating_xml, validating, ready
     public ?string $errorMessage;
@@ -27,10 +33,16 @@ class ConversionProject
         $this->id = $attributes['id'] ?? uniqid('proj_');
         $this->uuid = $attributes['uuid'] ?? $this->generateUuid();
         $this->title = $attributes['title'] ?? 'Bản nhạc chưa đặt tên';
+        $this->composer = $attributes['composer'] ?? '';
+        $this->categorySlug = $attributes['category_slug'] ?? '';
+        $this->categoryName = $attributes['category_name'] ?? '';
+        $this->songNumber = $attributes['song_number'] ?? '';
         $this->status = $attributes['status'] ?? 'UPLOADED';
         $this->sourceFilename = $attributes['source_filename'] ?? 'unknown.pdf';
         $this->sourceType = $attributes['source_type'] ?? 'pdf';
         $this->language = $attributes['language'] ?? 'vie+eng';
+        $this->detectLyrics = (bool)($attributes['detect_lyrics'] ?? true);
+        $this->detectChords = (bool)($attributes['detect_chords'] ?? true);
         $this->progress = (int)($attributes['progress'] ?? 0);
         $this->currentStep = $attributes['current_step'] ?? 'uploaded';
         $this->errorMessage = $attributes['error_message'] ?? null;
@@ -40,14 +52,12 @@ class ConversionProject
 
     public static function generateUuid(): string
     {
-        return sprintf(
-            '%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
-            mt_rand(0, 0xffff), mt_rand(0, 0xffff),
-            mt_rand(0, 0xffff),
-            mt_rand(0, 0x0fff) | 0x4000,
-            mt_rand(0, 0x3fff) | 0x8000,
-            mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff)
-        );
+        $bytes = random_bytes(16);
+        $bytes[6] = chr((ord($bytes[6]) & 0x0f) | 0x40);
+        $bytes[8] = chr((ord($bytes[8]) & 0x3f) | 0x80);
+        $hex = bin2hex($bytes);
+        return substr($hex, 0, 8) . '-' . substr($hex, 8, 4) . '-' . substr($hex, 12, 4)
+            . '-' . substr($hex, 16, 4) . '-' . substr($hex, 20, 12);
     }
 
     public function toArray(): array
@@ -56,10 +66,16 @@ class ConversionProject
             'id' => $this->id,
             'uuid' => $this->uuid,
             'title' => $this->title,
+            'composer' => $this->composer,
+            'category_slug' => $this->categorySlug,
+            'category_name' => $this->categoryName,
+            'song_number' => $this->songNumber,
             'status' => $this->status,
             'source_filename' => $this->sourceFilename,
             'source_type' => $this->sourceType,
             'language' => $this->language,
+            'detect_lyrics' => $this->detectLyrics,
+            'detect_chords' => $this->detectChords,
             'progress' => $this->progress,
             'current_step' => $this->currentStep,
             'error_message' => $this->errorMessage,

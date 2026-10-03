@@ -59,7 +59,12 @@ class HarmonyXmlWriter
         }
 
         if ($harmony->beatOffset > 0) {
-            $harmElem->appendChild($doc->createElement('offset', (string)$harmony->beatOffset));
+            // HarmonyDto stores offset in quarter-note beats for the editor.
+            // MusicXML serializes <offset> in the active <divisions> unit.
+            $divisions = $this->activeDivisions($xpath, $measureNode);
+            $offsetDivisions = $harmony->beatOffset * $divisions;
+            $serialized = rtrim(rtrim(number_format($offsetDivisions, 6, '.', ''), '0'), '.');
+            $harmElem->appendChild($doc->createElement('offset', $serialized));
         }
 
         // Chèn vào trước nốt đầu tiên của measure
@@ -82,5 +87,15 @@ class HarmonyXmlWriter
         }
 
         return false;
+    }
+
+    private function activeDivisions(DOMXPath $xpath, DOMElement $measure): float
+    {
+        $nodes = $xpath->query('preceding::*[local-name()="divisions"] | .//*[local-name()="divisions"]', $measure);
+        if ($nodes && $nodes->length > 0) {
+            $value = (float) $nodes->item($nodes->length - 1)->textContent;
+            if ($value > 0) return $value;
+        }
+        return 1.0;
     }
 }

@@ -35,7 +35,7 @@ return [
     | Quality & Security Boundaries
     |--------------------------------------------------------------------------
     */
-    'max_file_size_mb' => 25,
-    'max_pages' => 20,
+    'max_file_size_mb' => 50,
+    'max_pages' => 50,
     'allowed_extensions' => ['pdf', 'png', 'jpg', 'jpeg', 'tif', 'tiff'],
 ];

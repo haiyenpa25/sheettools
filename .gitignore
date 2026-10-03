@@ -16,6 +16,11 @@
 !/storage/cache/.gitkeep
 /storage/logs/*.log
 /storage/test_*
+/storage/
+/download/
+/.agents.disabled/
+/DockerDesktopInstaller.exe
+/sheettools-main.zip
 
 # Tesseract traineddata
 /workers/tessdata/

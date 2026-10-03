@@ -26,6 +26,13 @@
         </p>
         <div class="flex gap-2 justify-end">
           <button
+            v-if="canRetry"
+            @click="$emit('retry')"
+            class="px-3 py-1.5 bg-primary text-on-primary text-xs font-semibold rounded hover:brightness-110 transition-colors"
+          >
+            Thử lại từ checkpoint
+          </button>
+          <button
             @click="$emit('cancel')"
             class="px-3 py-1.5 bg-surface-container text-on-surface text-xs font-semibold rounded hover:bg-surface-container-high transition-colors"
           >
@@ -85,7 +92,7 @@
               ></div>
             </div>
             <p class="font-label-sm text-xs text-on-surface-variant">
-              {{ currentStep === 2 ? 'Đang phân tích cao độ pixel và trường độ nốt...' : (currentStep > 2 ? 'Khuông nhạc đã nhận dạng' : 'Chờ') }}
+              {{ currentStep === 2 && pageProgress ? `Đã xử lý ${pageProgress.processed_pages}/${pageProgress.total_pages} trang${pageProgress.current_page ? ` · đang xử lý trang ${pageProgress.current_page}` : ''}` : (currentStep === 2 ? 'Đang phân tích cao độ pixel và trường độ nốt...' : (currentStep > 2 ? 'Khuông nhạc đã nhận dạng' : 'Chờ')) }}
             </p>
           </div>
         </div>
@@ -184,15 +191,19 @@ const props = withDefaults(defineProps<{
   step?: number;
   progress?: number;
   errorMessage?: string | null;
+  canRetry?: boolean;
+  pageProgress?: { current_page: number | null; total_pages: number; processed_pages: number } | null;
 }>(), {
   step: 2,
   progress: 40,
   errorMessage: null,
+  canRetry: false,
 });
 
 defineEmits<{
   (e: 'completed'): void;
   (e: 'cancel'): void;
+  (e: 'retry'): void;
 }>();
 
 const currentStep = computed(() => props.step);

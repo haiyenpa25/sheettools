@@ -1,0 +1,79 @@
+name: sheettools
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        AUDIVERIS_VERSION: "5.11.0"
+        AUDIVERIS_DEB: "Audiveris-5.11.0-ubuntu24.04-x86_64.deb"
+    image: sheettools:local
+    container_name: sheettools-app
+    restart: unless-stopped
+    ports:
+      - "${SHEETTOOLS_PORT:-8080}:80"
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      PYTHON_BIN: /opt/venv/bin/python
+      JAVA_BIN: java
+      AUDIVERIS_EXE: /opt/audiveris/bin/Audiveris
+      TESSDATA_PREFIX: /usr/share/tesseract-ocr/5/tessdata
+      TESSERACT_BIN: tesseract
+      HOME: /var/www/html/storage/cache/runtime-home
+      XDG_CACHE_HOME: /var/www/html/storage/cache/runtime-home/.cache
+      XDG_CONFIG_HOME: /var/www/html/storage/cache/runtime-home/.config
+      XDG_DATA_HOME: /var/www/html/storage/cache/runtime-home/.local/share
+      OMR_TIMEOUT_SECONDS: "${OMR_TIMEOUT_SECONDS:-300}"
+      SHEETTOOLS_API_TOKEN: "${SHEETTOOLS_API_TOKEN:-}"
+      CORS_ORIGIN: "${CORS_ORIGIN:-http://localhost:5173}"
+      ENABLE_EXPERIMENTAL_CV_FALLBACK: "${ENABLE_EXPERIMENTAL_CV_FALLBACK:-0}"
+    volumes:
+      - sheettools-storage:/var/www/html/storage
+    deploy:
+      resources:
+        limits:
+          memory: 6G
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
+
+  worker:
+    image: sheettools:local
+    restart: unless-stopped
+    command: ["php", "workers/job_worker.php"]
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      PYTHON_BIN: /opt/venv/bin/python
+      JAVA_BIN: java
+      AUDIVERIS_EXE: /opt/audiveris/bin/Audiveris
+      TESSDATA_PREFIX: /usr/share/tesseract-ocr/5/tessdata
+      TESSERACT_BIN: tesseract
+      HOME: /var/www/html/storage/cache/runtime-home
+      XDG_CACHE_HOME: /var/www/html/storage/cache/runtime-home/.cache
+      XDG_CONFIG_HOME: /var/www/html/storage/cache/runtime-home/.config
+      XDG_DATA_HOME: /var/www/html/storage/cache/runtime-home/.local/share
+      OMR_TIMEOUT_SECONDS: "${OMR_TIMEOUT_SECONDS:-300}"
+      ENABLE_EXPERIMENTAL_CV_FALLBACK: "${ENABLE_EXPERIMENTAL_CV_FALLBACK:-0}"
+      JOB_POLL_SECONDS: "2"
+    volumes:
+      - sheettools-storage:/var/www/html/storage
+    deploy:
+      resources:
+        limits:
+          memory: 6G
+    healthcheck:
+      test: ["CMD", "php", "-r", "exit(is_dir('/var/www/html/storage/jobs') ? 0 : 1);"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  sheettools-storage:
+    name: sheettools-storage

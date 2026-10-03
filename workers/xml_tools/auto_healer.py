@@ -33,7 +33,7 @@ def _quantize_ql(ql: float) -> float:
 
 
 def heal_musicxml(input_xml_path: str, output_xml_path: str = None,
-                  quantize: bool = True) -> bool:
+                  quantize: bool = True, apply_unsafe_repairs: bool = False) -> bool:
     """
     Làm sạch và cân bằng MusicXML từ OMR.
 
@@ -50,6 +50,16 @@ def heal_musicxml(input_xml_path: str, output_xml_path: str = None,
     if not os.path.exists(input_xml_path):
         print(f"Error: File not found: {input_xml_path}")
         return False
+
+    # Automatic duration quantization, trimming and rest insertion can change
+    # the music—especially in polyphonic measures. The production-safe default
+    # is therefore audit-only. Callers must explicitly opt into legacy repair.
+    if not apply_unsafe_repairs:
+        if output_xml_path != input_xml_path:
+            import shutil
+            shutil.copy2(input_xml_path, output_xml_path)
+        print("Auto-healer audit-only mode: MusicXML preserved without musical edits.")
+        return True
 
     try:
         from music21 import converter, meter, note, stream
@@ -154,7 +164,9 @@ if __name__ == "__main__":
     parser.add_argument("--input", "-i", required=True, help="Input MusicXML file")
     parser.add_argument("--output", "-o", default=None, help="Output MusicXML file")
     parser.add_argument("--no-quantize", action="store_true", help="Disable duration quantization")
+    parser.add_argument("--apply-unsafe-repairs", action="store_true", help="Explicitly allow duration/rest mutations")
     args = parser.parse_args()
 
-    success = heal_musicxml(args.input, args.output, quantize=not args.no_quantize)
+    success = heal_musicxml(args.input, args.output, quantize=not args.no_quantize,
+                            apply_unsafe_repairs=args.apply_unsafe_repairs)
     sys.exit(0 if success else 1)

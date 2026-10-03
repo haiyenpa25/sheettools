@@ -23,9 +23,15 @@ class HealthCheckService
         $java = $this->checkJava();
         $tess = $this->checkTesseract();
         $storage = $this->checkStorage();
+        $audiveris = $this->checkAudiveris();
+
+        $statuses = array_column([$php, $py, $java, $tess, $storage, $audiveris], 'status');
+        $status = array_intersect($statuses, ['ERROR', 'MISSING'])
+            ? 'UNHEALTHY'
+            : (in_array('WARNING', $statuses, true) ? 'DEGRADED' : 'HEALTHY');
 
         return [
-            'status' => 'HEALTHY',
+            'status' => $status,
             'timestamp' => date('Y-m-d H:i:s'),
             'diagnostics' => [
                 'php' => $php,
@@ -34,6 +40,7 @@ class HealthCheckService
                 'java' => $java,
                 'tesseract' => $tess,
                 'storage' => $storage,
+                'audiveris' => $audiveris,
             ],
             'php' => $php,
             'node_npm' => $node,
@@ -41,7 +48,21 @@ class HealthCheckService
             'java' => $java,
             'tesseract' => $tess,
             'storage' => $storage,
+            'audiveris' => $audiveris,
             'summary' => 'System diagnosis completed',
+        ];
+    }
+
+    public function checkAudiveris(): array
+    {
+        $binary = getenv('AUDIVERIS_EXE') ?: 'Audiveris';
+        $output = $this->execCommand(escapeshellarg($binary) . ' -version 2>&1');
+        $available = str_contains($output, 'Version:') && str_contains($output, 'OCR Engine:');
+        return [
+            'status' => $available ? 'OK' : 'MISSING',
+            'binary' => $binary,
+            'version' => $available && preg_match('/Version:\s+([^\s]+)/', $output, $match) ? $match[1] : null,
+            'batch_ready' => $available,
         ];
     }
 
@@ -68,7 +89,8 @@ class HealthCheckService
     public function checkNodeAndNpm(): array
     {
         $nodeVersion = $this->execCommand('node -v');
-        $npmVersion = $this->execCommand('npm.cmd -v');
+        $npmCommand = PHP_OS_FAMILY === 'Windows' ? 'npm.cmd -v' : 'npm -v';
+        $npmVersion = $this->execCommand($npmCommand);
 
         $hasNode = !empty($nodeVersion) && str_starts_with($nodeVersion, 'v');
         $hasNpm = !empty($npmVersion) && preg_match('/^\d+\./', $npmVersion);

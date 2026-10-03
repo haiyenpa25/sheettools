@@ -17,5 +17,6 @@ final readonly class ConversionInputDto
         public string $language = 'vie+eng',
         public bool $detectLyrics = true,
         public bool $detectChords = true,
+        public ?int $retryPageIndex = null,
     ) {}
 }

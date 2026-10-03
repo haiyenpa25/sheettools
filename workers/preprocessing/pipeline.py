@@ -13,7 +13,53 @@ Pipeline tiền xử lý ảnh bản nhạc nâng cao:
 import sys
 import os
 import argparse
+import json
 import numpy as np
+
+
+def analyze_image_quality(gray: np.ndarray) -> dict:
+    """Classify a page before filtering so clean scans are not overprocessed."""
+    import cv2
+    if gray.ndim != 2:
+        raise ValueError("quality analysis requires a grayscale image")
+    sampled = gray[::max(1, gray.shape[0] // 800), ::max(1, gray.shape[1] // 800)]
+    near_binary = float(np.mean((sampled < 24) | (sampled > 231)))
+    contrast = float(np.std(sampled))
+    blur_score = float(cv2.Laplacian(sampled, cv2.CV_64F).var())
+    blocks = cv2.resize(sampled, (8, 8), interpolation=cv2.INTER_AREA)
+    illumination_range = float(blocks.max() - blocks.min())
+    binary_threshold = float(os.getenv('IMAGE_NEAR_BINARY_THRESHOLD', '0.96'))
+    illumination_threshold = float(os.getenv('IMAGE_ILLUMINATION_RANGE_THRESHOLD', '90'))
+    blur_threshold = float(os.getenv('IMAGE_BLUR_SCORE_THRESHOLD', '35'))
+    if near_binary > binary_threshold:
+        profile = "already_binary"
+    elif illumination_range > illumination_threshold:
+        profile = "uneven_lighting"
+    elif blur_score < blur_threshold:
+        profile = "low_resolution_or_blurred"
+    else:
+        profile = "clean_scan"
+    return {
+        "profile": profile,
+        "metrics": {
+            "near_binary_ratio": round(near_binary, 4),
+            "contrast_std": round(contrast, 2),
+            "blur_score": round(blur_score, 2),
+            "illumination_range": round(illumination_range, 2),
+        },
+        "recommended": {
+            "shadow_removal": profile == "uneven_lighting",
+            "clahe": profile in {"uneven_lighting", "low_resolution_or_blurred"} or contrast < 38,
+            "denoise": profile not in {"already_binary", "low_resolution_or_blurred"},
+            "preserve_grayscale_for_omr": True,
+        },
+        "thresholds": {
+            "near_binary_ratio": binary_threshold,
+            "illumination_range": illumination_threshold,
+            "blur_score": blur_threshold,
+            "calibration_status": "heuristic_requires_dataset_benchmark",
+        },
+    }
 
 
 def _sauvola_binarize(gray: np.ndarray, window_size: int = 25, k: float = 0.15) -> np.ndarray:
@@ -74,8 +120,8 @@ def _deskew(gray: np.ndarray, max_angle_deg: float = 10.0) -> np.ndarray:
 
     # Tính góc của từng đường thẳng (chỉ lấy đường gần nằm ngang: |angle| < 15°)
     angles = []
-    for line in lines:
-        x1, y1, x2, y2 = line[0]
+    # OpenCV builds return either (N, 1, 4) or (N, 4); normalize first.
+    for x1, y1, x2, y2 in np.asarray(lines).reshape(-1, 4):
         angle_deg = np.degrees(np.arctan2(y2 - y1, x2 - x1))
         if abs(angle_deg) < 15.0:
             angles.append(angle_deg)
@@ -101,8 +147,10 @@ def _deskew(gray: np.ndarray, max_angle_deg: float = 10.0) -> np.ndarray:
 
 def preprocess_image(input_path: str, output_path: str,
                      enable_deskew: bool = True,
-                     enable_shadow_removal: bool = True,
-                     enable_sauvola: bool = False) -> bool:
+                     enable_shadow_removal: bool | None = None,
+                     enable_sauvola: bool = False,
+                     report_path: str | None = None,
+                     debug_dir: str | None = None) -> bool:
     """
     Pipeline tiền xử lý ảnh bản nhạc nâng cao.
 
@@ -130,34 +178,62 @@ def preprocess_image(input_path: str, output_path: str,
         print(f"ERROR: Cannot decode image: {input_path}")
         return False
 
+    def save_debug(name: str, image: np.ndarray) -> None:
+        if debug_dir is None:
+            return
+        os.makedirs(debug_dir, exist_ok=True)
+        path = os.path.join(debug_dir, name)
+        if not cv2.imwrite(path, image):
+            raise RuntimeError(f"Could not save preprocessing debug image: {path}")
+
+    save_debug("01_original.png", img)
+
     # ── Bước 1: Grayscale ──
     if len(img.shape) == 3:
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     else:
         gray = img.copy()
+    save_debug("02_gray.png", gray)
 
-    # ── Bước 2: Shadow Removal (ảnh chụp điện thoại) ──
-    if enable_shadow_removal:
+    quality = analyze_image_quality(gray)
+    recommendations = quality["recommended"]
+
+    # ── Bước 2: Shadow Removal chỉ cho ảnh có ánh sáng không đều ──
+    use_shadow_removal = recommendations["shadow_removal"] if enable_shadow_removal is None else enable_shadow_removal
+    if use_shadow_removal:
         gray = _remove_shadow(gray)
 
     # ── Bước 3: Deskew ──
     if enable_deskew:
         gray = _deskew(gray, max_angle_deg=10.0)
+    save_debug("03_deskew.png", gray)
 
     # ── Bước 4: CLAHE Contrast Enhancement ──
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-    gray = clahe.apply(gray)
+    if recommendations["clahe"]:
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        gray = clahe.apply(gray)
 
     # ── Bước 5: Fast Denoising ──
-    gray = cv2.fastNlMeansDenoising(gray, h=7, templateWindowSize=7, searchWindowSize=21)
+    if recommendations["denoise"]:
+        gray = cv2.fastNlMeansDenoising(gray, h=5, templateWindowSize=7, searchWindowSize=21)
 
     # ── Bước 6: Adaptive Binarization (tùy chọn) ──
     if enable_sauvola:
         gray = _sauvola_binarize(gray, window_size=25, k=0.15)
 
+    threshold_preview = gray if enable_sauvola else cv2.adaptiveThreshold(
+        gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 25, 15
+    )
+    save_debug("04_threshold.png", threshold_preview)
+    save_debug("05_normalized.png", gray)
+
     # ── Lưu kết quả ──
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
     cv2.imwrite(output_path, gray)
+    if report_path:
+        os.makedirs(os.path.dirname(os.path.abspath(report_path)), exist_ok=True)
+        with open(report_path, 'w', encoding='utf-8') as report_file:
+            json.dump(quality, report_file, ensure_ascii=False, indent=2)
     print(f"SUCCESS: Preprocessed image saved to {output_path}")
     return True
 
@@ -171,12 +247,16 @@ if __name__ == "__main__":
     parser.add_argument("--no-deskew", action="store_true", help="Disable auto deskew")
     parser.add_argument("--no-shadow", action="store_true", help="Disable shadow removal")
     parser.add_argument("--sauvola", action="store_true", help="Enable Sauvola binarization")
+    parser.add_argument("--report", help="Write image quality/profile report as JSON")
+    parser.add_argument("--debug-dir", help="Write numbered stage images for diagnosis")
     args = parser.parse_args()
 
     success = preprocess_image(
         args.input, args.output,
         enable_deskew=not args.no_deskew,
-        enable_shadow_removal=not args.no_shadow,
-        enable_sauvola=args.sauvola
+        enable_shadow_removal=False if args.no_shadow else None,
+        enable_sauvola=args.sauvola,
+        report_path=args.report,
+        debug_dir=args.debug_dir,
     )
     sys.exit(0 if success else 1)

@@ -50,7 +50,6 @@ export class MusicXmlEngine {
 
   constructor(xmlString: string) {
     this.doc = new DOMParser().parseFromString(xmlString, 'application/xml');
-    this.autoFixVietnameseLyrics();
     this.saveState();
   }
 
@@ -96,23 +95,50 @@ export class MusicXmlEngine {
     return new XMLSerializer().serializeToString(this.doc);
   }
 
+  /** Update score metadata without regenerating or replacing recognized notes. */
+  public updateScoreStructure(beats: number, beatType: number, fifths: number): string {
+    const firstMeasure = this.doc.querySelector('part > measure');
+    if (!firstMeasure) throw new Error('MusicXML has no measure to update');
+    let attributes = firstMeasure.querySelector(':scope > attributes');
+    if (!attributes) {
+      attributes = this.doc.createElement('attributes');
+      firstMeasure.insertBefore(attributes, firstMeasure.firstChild);
+    }
+    let key = attributes.querySelector(':scope > key');
+    if (!key) { key = this.doc.createElement('key'); attributes.appendChild(key); }
+    let fifthsElement = key.querySelector(':scope > fifths');
+    if (!fifthsElement) { fifthsElement = this.doc.createElement('fifths'); key.appendChild(fifthsElement); }
+    fifthsElement.textContent = String(fifths);
+
+    let time = attributes.querySelector(':scope > time');
+    if (!time) { time = this.doc.createElement('time'); attributes.appendChild(time); }
+    let beatsElement = time.querySelector(':scope > beats');
+    if (!beatsElement) { beatsElement = this.doc.createElement('beats'); time.appendChild(beatsElement); }
+    let beatTypeElement = time.querySelector(':scope > beat-type');
+    if (!beatTypeElement) { beatTypeElement = this.doc.createElement('beat-type'); time.appendChild(beatTypeElement); }
+    beatsElement.textContent = String(beats);
+    beatTypeElement.textContent = String(beatType);
+    this.saveState();
+    return this.getXmlString();
+  }
+
   // ─── METADATA ───
   public extractMetadata(): { title: string; composer: string; lyricist: string; tempo: number; timeSig: string; keySig: string } {
     const title = this.doc.querySelector('work > work-title')?.textContent ||
-                  this.doc.querySelector('movement-title')?.textContent || '001 Hỡi Thánh Vương, Kíp Ngự Lai';
-    const composer = this.doc.querySelector('creator[type="composer"]')?.textContent || 'Felice de Giardini, 1769';
-    const lyricist = this.doc.querySelector('creator[type="lyricist"]')?.textContent || 'Anon, 1757';
+                  this.doc.querySelector('movement-title')?.textContent || 'Chưa có tiêu đề';
+    const composer = this.doc.querySelector('creator[type="composer"]')?.textContent || '';
+    const lyricist = this.doc.querySelector('creator[type="lyricist"]')?.textContent || '';
 
     // Tempo
     const tempoNode = this.doc.querySelector('sound[tempo]') || this.doc.querySelector('per-minute');
-    const tempo = tempoNode ? parseInt(tempoNode.getAttribute('tempo') || tempoNode.textContent || '104', 10) : 104;
+    const tempo = tempoNode ? parseInt(tempoNode.getAttribute('tempo') || tempoNode.textContent || '100', 10) : 100;
 
     // Time signature
-    const beats = this.doc.querySelector('time > beats')?.textContent || '3';
+    const beats = this.doc.querySelector('time > beats')?.textContent || '4';
     const beatType = this.doc.querySelector('time > beat-type')?.textContent || '4';
 
     // Key signature (fifths)
-    const fifths = parseInt(this.doc.querySelector('key > fifths')?.textContent || '1', 10);
+    const fifths = parseInt(this.doc.querySelector('key > fifths')?.textContent || '0', 10);
     const keyNames: Record<number, string> = {
       '-7': 'Cb Maj / Ab min', '-6': 'Gb Maj / Eb min', '-5': 'Db Maj / Bb min',
       '-4': 'Ab Maj / F min', '-3': 'Eb Maj / C min', '-2': 'Bb Maj / G min',
@@ -1009,4 +1035,3 @@ export class MusicXmlEngine {
     return false;
   }
 }
-

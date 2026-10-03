@@ -1,0 +1,16 @@
+.git
+.gitignore
+.agents.disabled
+node_modules
+vendor
+dist
+storage
+download
+DockerDesktopInstaller.exe
+sheettools-main.zip
+*.log
+__pycache__
+*.pyc
+.env
+.venv
+

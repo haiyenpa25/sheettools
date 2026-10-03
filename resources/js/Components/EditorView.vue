@@ -22,7 +22,7 @@
             :class="layoutMode === 'split' ? 'bg-surface-container-lowest font-bold text-primary shadow-xs' : 'text-secondary hover:text-on-surface'"
             title="Xem song song 50/50"
           >
-            Split 50/50
+            Chia đôi
           </button>
           <button
             @click="layoutMode = 'score'"
@@ -30,7 +30,7 @@
             :class="layoutMode === 'score' ? 'bg-surface-container-lowest font-bold text-primary shadow-xs' : 'text-secondary hover:text-on-surface'"
             title="Mở rộng 100% Bản nhạc"
           >
-            Full Score
+            Chỉ bản nhạc
           </button>
           <button
             @click="layoutMode = 'source'"
@@ -38,7 +38,7 @@
             :class="layoutMode === 'source' ? 'bg-surface-container-lowest font-bold text-primary shadow-xs' : 'text-secondary hover:text-on-surface'"
             title="Mở rộng 100% Bản gốc"
           >
-            Full Source
+            Chỉ bản gốc
           </button>
         </div>
 
@@ -51,7 +51,7 @@
             title="Hiển thị nốt nhạc kèm lời bài hát tiếng Việt đầy đủ"
           >
             <span class="material-symbols-outlined text-xs">lyrics</span>
-            <span>📝 Kèm Lời Hát</span>
+            <span>Kèm lời</span>
           </button>
           <button
             @click="setScoreViewMode('clean')"
@@ -60,7 +60,7 @@
             title="Hiển thị nốt nhạc & hợp âm sạch sẽ (Bản không lời)"
           >
             <span class="material-symbols-outlined text-xs">music_note</span>
-            <span>🎼 Bản Sạch (Nốt)</span>
+            <span>Chỉ nốt</span>
           </button>
         </div>
 
@@ -242,7 +242,7 @@
           title="Xuất bản 3 Phiên bản: Bản Đầy Đủ, Bản Không Lời và Bản Hợp Âm Chuẩn"
         >
           <span class="material-symbols-outlined text-sm">ios_share</span>
-          <span>Xuất Bản (3 Version)</span>
+          <span>Xuất 3 phiên bản</span>
         </button>
       </div>
     </div>
@@ -257,7 +257,7 @@
       >
         <div class="h-9 bg-surface-container-low border-b border-border-subtle flex items-center px-3 justify-between shrink-0 gap-2 flex-wrap">
           <div class="flex items-center gap-2">
-            <span class="font-label-sm text-xs text-on-surface font-bold uppercase tracking-wider">Source Scan</span>
+            <span class="font-label-sm text-xs text-on-surface font-bold uppercase tracking-wider">Bản gốc</span>
             <!-- 3-Zone Inspector Toggle -->
             <button
               @click="show3ZoneOverlay = !show3ZoneOverlay"
@@ -330,7 +330,28 @@
             </button>
           </div>
 
-          <span v-else class="text-[11px] text-secondary">Trang 1 / 1</span>
+          <span v-else class="text-[11px] text-secondary">
+            Trang {{ activeSourcePageIndex + 1 }} / {{ Math.max(sourcePages.length, 1) }}
+          </span>
+        </div>
+
+        <div
+          v-if="sourcePages.length > 1"
+          class="flex gap-2 px-3 py-2 overflow-x-auto border-b border-border-subtle bg-surface-container-low"
+          aria-label="Điều hướng trang nguồn"
+        >
+          <button
+            v-for="(pageUrl, pageIndex) in sourcePages"
+            :key="pageUrl"
+            type="button"
+            class="relative shrink-0 w-14 h-16 rounded border overflow-hidden bg-white transition-colors"
+            :class="pageIndex === activeSourcePageIndex ? 'border-primary ring-2 ring-primary/30' : 'border-border-subtle hover:border-primary/60'"
+            :aria-label="`Mở trang ${pageIndex + 1}`"
+            @click="activeSourcePageIndex = pageIndex"
+          >
+            <img :src="pageUrl" alt="" class="w-full h-full object-cover object-top" loading="lazy" />
+            <span class="absolute right-0.5 bottom-0.5 min-w-4 px-1 rounded bg-slate-950/80 text-white text-[9px]">{{ pageIndex + 1 }}</span>
+          </button>
         </div>
 
         <div class="flex-1 p-panel-padding overflow-auto bg-workspace-bg flex justify-center items-start">
@@ -400,8 +421,23 @@
               ></div>
             </template>
 
-            <!-- If user provided an actual uploaded PDF -->
-            <div v-if="sourcePdfUrl" class="w-full h-full min-h-[550px] flex flex-col">
+            <!-- Prefer immutable backend-rendered pages for accurate long-document navigation. -->
+            <div v-if="sourcePages.length" class="relative">
+              <img
+                :src="sourcePages[activeSourcePageIndex]"
+                :alt="`Trang nguồn ${activeSourcePageIndex + 1}`"
+                class="w-full h-auto object-contain rounded-xs shadow-sm border border-border-subtle"
+              />
+              <div
+                class="absolute border-2 pointer-events-none rounded transition-all"
+                :class="hasIssue(activeMeasure) ? 'border-error bg-error/20' : 'border-primary bg-sync-active-highlight'"
+                :style="activeMeasureBoxStyle"
+                :title="`Vị trí ước lượng của ô nhịp ${activeMeasure}`"
+              ></div>
+            </div>
+
+            <!-- Local preview while a queued upload has not produced rendered pages yet. -->
+            <div v-else-if="sourcePdfUrl" class="w-full h-full min-h-[550px] flex flex-col">
               <iframe
                 :src="sourcePdfUrl + '#toolbar=0&navpanes=0'"
                 class="w-full h-[600px] rounded border border-border-subtle shadow-sm bg-white"
@@ -426,8 +462,8 @@
                 <div class="inline-block relative">
                   <h3 class="font-bold text-base text-slate-900 tracking-wide uppercase">{{ meta.title || 'TIÊU ĐỀ BÀI HÁT' }}</h3>
                   <div class="flex items-center justify-between text-xs text-slate-600 mt-1 gap-6">
-                    <span class="italic text-slate-500">{{ meta.lyricist || 'Lời: Thánh Ca' }}</span>
-                    <span class="font-semibold text-slate-800">{{ meta.composer || 'Nhạc: Khuyết danh' }}</span>
+                    <span v-if="meta.lyricist" class="italic text-slate-500">{{ meta.lyricist }}</span>
+                    <span v-if="meta.composer" class="font-semibold text-slate-800">{{ meta.composer }}</span>
                   </div>
                 </div>
                 <span class="absolute top-0 right-0 text-[9px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded border border-emerald-300">
@@ -529,7 +565,7 @@
       >
         <div class="h-8 bg-surface-container-low border-b border-border-subtle flex items-center px-3 justify-between shrink-0">
           <div class="flex items-center gap-2">
-            <span class="font-label-sm text-xs text-on-surface font-semibold uppercase tracking-wider">Recognized Score (OSMD MusicXML)</span>
+            <span class="font-label-sm text-xs text-on-surface font-semibold uppercase tracking-wider">Kết quả MusicXML</span>
             <span class="text-[10px] bg-primary/10 text-primary font-bold px-2 py-0.2 rounded-full flex items-center gap-1 border border-primary/20">
               <span class="material-symbols-outlined text-xs">edit</span>
               Click vào chữ/nốt trên bản nhạc để sửa trực tiếp
@@ -626,6 +662,7 @@
         <div class="flex gap-1 h-full items-end">
           <!-- Lyrics Tab -->
           <button
+            v-if="versesCount > 0"
             @click="activeTab = 'lyrics'; drawerCollapsed = false"
             class="px-4 py-2 font-label-sm text-xs font-semibold flex items-center gap-1.5 transition-colors rounded-t-sm"
             :class="activeTab === 'lyrics' && !drawerCollapsed
@@ -641,6 +678,7 @@
 
           <!-- Chords Tab -->
           <button
+            v-if="harmonies.length > 0"
             @click="activeTab = 'chords'; drawerCollapsed = false"
             class="px-4 py-2 font-label-sm text-xs font-semibold flex items-center gap-1.5 transition-colors rounded-t-sm"
             :class="activeTab === 'chords' && !drawerCollapsed
@@ -1028,13 +1066,13 @@
               class="px-3 py-1 bg-primary text-on-primary rounded text-xs font-semibold hover:bg-primary-container transition-colors flex items-center gap-1 shadow-xs"
             >
               <span class="material-symbols-outlined text-sm">auto_fix_high</span>
-              <span>Quét & Tự động sửa lỗi toàn bài</span>
+              <span>Kiểm tra toàn bài</span>
             </button>
           </div>
 
           <div v-if="issues.length === 0" class="flex items-center gap-2 text-success text-xs font-semibold p-4 bg-success/5 border border-success/20 rounded-lg">
             <span class="material-symbols-outlined text-base">verified</span>
-            <span>Không phát hiện lỗi cấu trúc XML hay cảnh báo OMR nào! Bản nhạc đã sẵn sàng xuất bản.</span>
+            <span>Không phát hiện lỗi cấu trúc cơ bản. Vẫn cần đối chiếu bản gốc trước khi xác nhận.</span>
           </div>
 
           <div v-else class="space-y-1.5">
@@ -1144,26 +1182,12 @@
               </select>
             </div>
 
-            <div>
-              <label class="block font-semibold text-on-surface mb-1">Số lượng ô nhịp (Total Measures)</label>
-              <div class="grid grid-cols-3 gap-2">
-                <button
-                  v-for="m in [8, 12, 16, 20, 24, 30]"
-                  :key="m"
-                  @click="structMeasuresCount = m"
-                  class="py-1.5 border rounded font-mono-label font-bold text-center transition-all"
-                  :class="structMeasuresCount === m ? 'bg-primary text-on-primary border-primary shadow-xs' : 'bg-surface-container-low border-border-subtle hover:bg-surface-container-high'"
-                >
-                  {{ m }} ô nhịp
-                </button>
-              </div>
-            </div>
           </div>
 
           <div class="flex justify-end gap-2 pt-3 border-t border-border-subtle">
             <button @click="showStructureModal = false" class="px-3 py-1.5 border border-border-subtle text-secondary rounded text-xs">Hủy</button>
             <button @click="applyScoreStructure" class="px-4 py-1.5 bg-primary text-on-primary rounded text-xs font-semibold hover:bg-primary-container shadow-xs">
-              Áp dụng & Tái tạo Khuông
+              Áp dụng, giữ nguyên nốt
             </button>
           </div>
         </div>
@@ -1177,10 +1201,10 @@ import { ref, computed, onMounted, onUnmounted, nextTick, reactive, watch } from
 import { OpenSheetMusicDisplay } from 'opensheetmusicdisplay';
 import { MusicXmlEngine, type ParsedLyric, type ParsedHarmony, type ParsedNoteDetail } from '../Services/MusicXmlEngine';
 import { AudioPlaybackEngine } from '../Services/AudioPlaybackEngine';
-import { OmrTranscriptionService } from '../Services/OmrTranscriptionService';
 
 const props = defineProps<{
   projectTitle: string;
+  projectUuid?: string;
   xmlContent: string;
   sourceImageUrl?: string;
   sourcePdfUrl?: string;
@@ -1196,15 +1220,13 @@ const showStructureModal = ref(false);
 const structTimeBeats = ref(4);
 const structTimeBeatType = ref(4);
 const structFifths = ref(1);
-const structMeasuresCount = ref(16);
 
 function applyScoreStructure() {
-  const newXml = OmrTranscriptionService.generateDynamicHymnStructure(
-    meta.value.title || props.projectTitle,
+  if (!xmlEngine) return;
+  const newXml = xmlEngine.updateScoreStructure(
     structTimeBeats.value,
     structTimeBeatType.value,
-    structFifths.value,
-    structMeasuresCount.value
+    structFifths.value
   );
   showStructureModal.value = false;
   initXml(newXml);
@@ -1214,6 +1236,24 @@ function applyScoreStructure() {
 let xmlEngine: MusicXmlEngine | null = null;
 const audioPlayer = new AudioPlaybackEngine();
 const show3ZoneOverlay = ref(false);
+const sourcePages = ref<string[]>([]);
+const activeSourcePageIndex = ref(0);
+
+async function loadSourcePages(): Promise<void> {
+  sourcePages.value = [];
+  activeSourcePageIndex.value = 0;
+  if (!props.projectUuid) return;
+  try {
+    const response = await fetch(`/api/conversions/${encodeURIComponent(props.projectUuid)}/pages`, { cache: 'no-store' });
+    if (!response.ok) return;
+    const payload = await response.json();
+    sourcePages.value = Array.isArray(payload?.data)
+      ? payload.data.map((page: { url?: string }) => page.url).filter((url: unknown): url is string => typeof url === 'string')
+      : [];
+  } catch (error) {
+    console.warn('Không tải được danh sách trang nguồn:', error);
+  }
+}
 
 // ════════════════ 3-ZONE INTERACTIVE DRAWING & CUSTOMIZATION STATE ════════════════
 export interface CustomZoneItem {
@@ -1392,8 +1432,7 @@ function applyCustomZonesAndRescan() {
   const notationCount = interactiveZones.filter(z => z.type === 'notation').length;
   const lyricCount = interactiveZones.filter(z => z.type === 'lyrics').length;
 
-  refreshAfterXmlMutation();
-  alert(`✨ Đã áp dụng ${interactiveZones.length} vùng tùy chỉnh (${headerCount} Header, ${notationCount} Khuông nốt, ${lyricCount} Lời) và tối ưu hóa nhận diện thành công!`);
+  alert(`Đã lưu lựa chọn ${interactiveZones.length} vùng (${headerCount} Header, ${notationCount} Khuông nốt, ${lyricCount} Lời). Nhận diện lại theo vùng chưa được chạy; MusicXML hiện tại không bị thay đổi.`);
 }
 
 // ════════════════ DYNAMIC STAFF & MEASURE PRECISION TRACER ════════════════
@@ -1411,18 +1450,7 @@ export interface TracedSystem {
 
 const tracedSystems = computed<TracedSystem[]>(() => {
   if (!xmlEngine) {
-    return Array.from({ length: 4 }, (_, sIdx) => ({
-      systemIndex: sIdx + 1,
-      measures: Array.from({ length: 4 }, (_, mIdx) => {
-        const mNum = sIdx * 4 + mIdx + 1;
-        return {
-          measureNumber: mNum,
-          chord: harmonies.value.find(h => h.measureNumber === mNum)?.displayText,
-          lyricText: (lyricsMap.value[activeVerse.value] || []).find(l => l.measureNumber === mNum)?.text,
-          notes: [{ id: `n_${mNum}_1`, measureNumber: mNum, noteIndex: 0, step: 'G', octave: 4, accidental: null, duration: 'quarter', isRest: false, isDotted: false, voice: 1 }]
-        };
-      })
-    }));
+    return [];
   }
 
   let maxM = 16;
@@ -1447,7 +1475,7 @@ const tracedSystems = computed<TracedSystem[]>(() => {
         const chord = harmonies.value.find(h => h.measureNumber === mNum)?.displayText;
         const lyrics = (lyricsMap.value[activeVerse.value] || []).filter(l => l.measureNumber === mNum);
         const lyricText = lyrics.map(l => l.text).join(' ');
-        const notes = allNotes[mNum] || [{ id: `n_${mNum}_1`, measureNumber: mNum, noteIndex: 0, step: 'G', octave: 4, accidental: null, duration: 'quarter', isRest: false, isDotted: false, voice: 1 }];
+        const notes = allNotes[mNum] || [];
 
         sysMeasures.push({
           measureNumber: mNum,
@@ -1582,8 +1610,23 @@ function changeZoom(delta: number) {
 const activeMeasure = ref(1);
 function selectMeasure(mNum: number) {
   activeMeasure.value = mNum;
+  activeSourcePageIndex.value = Math.min(measurePageMap.value.get(mNum) || 0, Math.max(sourcePages.value.length - 1, 0));
   loadMeasureNotes(mNum);
 }
+
+const measurePageMap = computed(() => {
+  const map = new Map<number, number>();
+  if (!xmlEngine) return map;
+  const doc = new DOMParser().parseFromString(xmlEngine.getXmlString(), 'application/xml');
+  const measures = Array.from(doc.querySelectorAll('part:first-of-type > measure'));
+  let pageIndex = 0;
+  measures.forEach((measure, index) => {
+    if (index > 0 && measure.querySelector(':scope > print[new-page="yes"]')) pageIndex += 1;
+    const number = Number.parseInt(measure.getAttribute('number') || '', 10) || index + 1;
+    map.set(number, pageIndex);
+  });
+  return map;
+});
 
 const activeMeasureBoxStyle = computed(() => {
   const m = activeMeasure.value;
@@ -1881,7 +1924,7 @@ function closeInlineChord() {
 // ════════════════ BOTTOM PANEL HANDLERS ════════════════
 // Lyrics data
 const lyricsMap = ref<Record<number, ParsedLyric[]>>({});
-const versesCount = computed(() => Object.keys(lyricsMap.value).length || 4);
+const versesCount = computed(() => Object.keys(lyricsMap.value).length);
 const currentVerseLyrics = computed(() => lyricsMap.value[activeVerse.value] || []);
 const showBulkLyrics = ref(false);
 const bulkLyricText = ref('');
@@ -2002,24 +2045,91 @@ function auditionNote(step: string, octave: number, accidental: string | null) {
   audioPlayer.playTone(freq, 0.4);
 }
 
-// Issues & Validation
-const issues = ref([
-  { id: 'iss_1', measureNumber: 2, entityType: 'lyric', message: 'Syllable "Vương," được chỉnh sửa so với OCR ("Vương")', severity: 'info' },
-  { id: 'iss_2', measureNumber: 2, entityType: 'harmony', message: 'Hợp âm chuyển vị Slash chord D/F# — cần kiểm tra nốt bass F#', severity: 'warning' },
-]);
+// Issues & Validation — generated only from the current MusicXML, never demo data.
+type ReviewIssue = { id: string; measureNumber: number; entityType: string; message: string; severity: 'info' | 'warning' | 'error' };
+const issues = ref<ReviewIssue[]>([]);
+const backendIssues = ref<ReviewIssue[]>([]);
+
+async function loadBackendDiagnostics(): Promise<void> {
+  backendIssues.value = [];
+  if (!props.projectUuid) return;
+  try {
+    const response = await fetch(`/api/conversions/${encodeURIComponent(props.projectUuid)}/validate`, { cache: 'no-store' });
+    if (!response.ok) return;
+    const payload = await response.json();
+    backendIssues.value = Array.isArray(payload?.issues) ? payload.issues.map((issue: any) => ({
+      id: String(issue.id),
+      measureNumber: Number(issue.measure || 0),
+      entityType: String(issue.type || 'structure'),
+      severity: issue.severity === 'error' ? 'error' : 'warning',
+      message: issue.kind === 'underfull'
+        ? `Thiếu phách: ${issue.found_quarters}/${issue.expected_quarters} phách.`
+        : `Thừa phách: ${issue.found_quarters}/${issue.expected_quarters} phách.`,
+    })) : [];
+    const existingIds = new Set(issues.value.map(issue => `${issue.entityType}:${issue.measureNumber}`));
+    issues.value.push(...backendIssues.value.filter(issue => !existingIds.has(`${issue.entityType}:${issue.measureNumber}`)));
+  } catch (error) {
+    console.warn('Không tải được chẩn đoán backend:', error);
+  }
+}
+
+function validateCurrentMusicXml() {
+  if (!xmlEngine) { issues.value = []; return; }
+  const doc = new DOMParser().parseFromString(xmlEngine.getXmlString(), 'application/xml');
+  const found: ReviewIssue[] = [];
+  if (doc.querySelector('parsererror')) {
+    issues.value = [{ id: 'xml_parse', measureNumber: 0, entityType: 'xml', message: 'MusicXML không hợp lệ cú pháp.', severity: 'error' }];
+    return;
+  }
+  const parts = Array.from(doc.querySelectorAll('score-partwise > part'));
+  if (parts.length === 0) found.push({ id: 'no_parts', measureNumber: 0, entityType: 'part', message: 'Không tìm thấy part nhạc nào.', severity: 'error' });
+  let issueIndex = 0;
+  parts.forEach(part => {
+    let divisions = 1;
+    let beats = 0;
+    let beatType = 0;
+    Array.from(part.querySelectorAll(':scope > measure')).forEach((measure, measureIndex) => {
+      const number = Number.parseInt(measure.getAttribute('number') || '', 10) || measureIndex + 1;
+      divisions = Number(measure.querySelector(':scope > attributes > divisions')?.textContent || divisions) || divisions;
+      beats = Number(measure.querySelector(':scope > attributes > time > beats')?.textContent || beats) || beats;
+      beatType = Number(measure.querySelector(':scope > attributes > time > beat-type')?.textContent || beatType) || beatType;
+      const voiceDurations = new Map<string, number>();
+      Array.from(measure.querySelectorAll(':scope > note')).forEach((note, noteIndex) => {
+        const isRest = Boolean(note.querySelector(':scope > rest'));
+        const isChord = Boolean(note.querySelector(':scope > chord'));
+        const duration = Number(note.querySelector(':scope > duration')?.textContent || 0);
+        const voice = note.querySelector(':scope > voice')?.textContent || '1';
+        if (!isRest && !note.querySelector(':scope > pitch > step, :scope > unpitched')) {
+          found.push({ id: `pitch_${issueIndex++}`, measureNumber: number, entityType: 'note', message: `Nốt ${noteIndex + 1} thiếu cao độ.`, severity: 'error' });
+        }
+        if (duration <= 0 && !note.querySelector(':scope > grace')) {
+          found.push({ id: `duration_${issueIndex++}`, measureNumber: number, entityType: 'duration', message: `Nốt ${noteIndex + 1} thiếu trường độ hợp lệ.`, severity: 'error' });
+        }
+        if (!isChord) voiceDurations.set(voice, (voiceDurations.get(voice) || 0) + Math.max(0, duration));
+      });
+      if (beats > 0 && beatType > 0 && divisions > 0 && measureIndex > 0) {
+        const expected = divisions * beats * 4 / beatType;
+        voiceDurations.forEach((actual, voice) => {
+          if (actual > 0 && Math.abs(actual - expected) > 0.01) {
+            found.push({ id: `measure_${issueIndex++}`, measureNumber: number, entityType: 'rhythm', message: `Voice ${voice}: tổng trường độ ${actual}, dự kiến ${expected}.`, severity: 'warning' });
+          }
+        });
+      }
+    });
+  });
+  issues.value = found;
+}
 
 function hasIssue(mNum: number) {
   return issues.value.some(i => i.measureNumber === mNum);
 }
 
-function runFullValidationAndRepair() {
-  if (!xmlEngine) return;
+async function runFullValidationAndRepair() {
   isSaving.value = true;
-  xmlEngine.autoFixVietnameseLyrics();
-  issues.value = [];
+  validateCurrentMusicXml();
+  await loadBackendDiagnostics();
   setTimeout(() => {
     isSaving.value = false;
-    refreshAfterXmlMutation();
   }, 300);
 }
 
@@ -2102,25 +2212,27 @@ function refreshAfterXmlMutation() {
   if (!xmlEngine) return;
   lyricsMap.value = xmlEngine.extractLyrics();
   harmonies.value = xmlEngine.extractHarmonies();
+  if (Object.keys(lyricsMap.value).length === 0 && harmonies.value.length === 0) {
+    activeTab.value = 'note';
+  }
   meta.value = xmlEngine.extractMetadata();
   loadMeasureNotes(activeMeasure.value);
+  validateCurrentMusicXml();
   reRenderScore();
 }
 
 // OSMD Setup & Initialization
 async function initXml(xmlString: string) {
-  // Nếu XML bị trống, có lỗi "Untitled Score" hoặc thiếu lời, tự động đồng bộ từ Transcription Engine
-  if (!xmlString || xmlString.includes('Untitled Score') || !xmlString.includes('<lyric>')) {
-    const titleToUse = props.projectTitle || 'TRỌN CẢ TẤM LÒNG';
-    const enrichedXml = OmrTranscriptionService.transcribeFromFile(titleToUse);
-    if (enrichedXml && enrichedXml.length > 200) {
-      xmlString = enrichedXml;
-    }
+  if (!xmlString || xmlString.trim() === '' || xmlString.includes('Untitled Score')) {
+    throw new Error('MusicXML chưa sẵn sàng; trình biên tập không được phép tự tạo nốt thay thế.');
   }
 
   xmlEngine = new MusicXmlEngine(xmlString);
   lyricsMap.value = xmlEngine.extractLyrics();
   harmonies.value = xmlEngine.extractHarmonies();
+  if (Object.keys(lyricsMap.value).length === 0 && harmonies.value.length === 0) {
+    activeTab.value = 'note';
+  }
   meta.value = xmlEngine.extractMetadata();
   editMetaTitle.value = meta.value.title;
   editMetaComposer.value = meta.value.composer;
@@ -2128,6 +2240,8 @@ async function initXml(xmlString: string) {
   currentBpm.value = meta.value.tempo;
   audioPlayer.setTempo(currentBpm.value);
   loadMeasureNotes(activeMeasure.value);
+  validateCurrentMusicXml();
+  await loadBackendDiagnostics();
   updateUndoRedoState();
 
   const container = document.getElementById('osmd-editor-container');
@@ -2272,19 +2386,7 @@ watch(
   { immediate: false }
 );
 
-watch(
-  () => props.projectTitle,
-  async (newTitle) => {
-    if (newTitle) {
-      const newXml = OmrTranscriptionService.transcribeFromFile(newTitle);
-      if (newXml) {
-        await nextTick();
-        await initXml(newXml);
-      }
-    }
-  },
-  { immediate: false }
-);
+watch(() => props.projectUuid, loadSourcePages);
 
 onMounted(async () => {
   window.addEventListener('keydown', handleKeydown);
@@ -2299,16 +2401,10 @@ onMounted(async () => {
 
   await nextTick();
   let xml = props.xmlContent;
-  if (!xml || xml.trim() === '' || xml.includes('Untitled Score')) {
-    const titleToUse = props.projectTitle || 'TỪ CÕI LÒNG SÂU THẲM';
-    xml = OmrTranscriptionService.transcribeFromFile(titleToUse);
-  }
-  if (!xml || xml.trim() === '') {
-    xml = await fetch('/golden.xml').then(r => r.text()).catch(() => '');
-  }
   if (xml) {
     await initXml(xml);
   }
+  await loadSourcePages();
 });
 
 onUnmounted(() => {

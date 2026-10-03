@@ -9,9 +9,19 @@ require_once dirname(__DIR__, 2) . '/app/Repositories/ConversionProjectRepositor
 
 use App\Services\ConversionService;
 use App\Repositories\ConversionProjectRepository;
+use App\Services\StorageService;
+use App\Services\ImagePreprocessService;
+use App\Adapters\AudiverisOmrEngine;
 
-$service = new ConversionService();
-$repo = new ConversionProjectRepository();
+$testRoot = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'sheettools_failure_' . bin2hex(random_bytes(5));
+$storage = new StorageService($testRoot);
+$repo = new ConversionProjectRepository($storage);
+$service = new ConversionService(
+    $repo,
+    $storage,
+    new ImagePreprocessService($storage),
+    new AudiverisOmrEngine($storage)
+);
 
 // 1. Create a project with invalid/corrupt content
 $tempFile = tempnam(sys_get_temp_dir(), 'invalid_sheet_');
@@ -30,5 +40,14 @@ assert($fresh->status === 'FAILED', "Status of corrupt PDF must be FAILED, got: 
 assert(!empty($fresh->errorMessage), "Error message must be set upon failure");
 
 @unlink($tempFile);
+function removeFailureTree(string $dir): void {
+    if (!is_dir($dir)) return;
+    foreach (array_diff(scandir($dir) ?: [], ['.', '..']) as $entry) {
+        $path = $dir . DIRECTORY_SEPARATOR . $entry;
+        is_dir($path) ? removeFailureTree($path) : unlink($path);
+    }
+    rmdir($dir);
+}
+removeFailureTree($testRoot);
 
 echo "  [Failure] FailureHandlingTest: PASS (Truthful failure reporting verified)\n";

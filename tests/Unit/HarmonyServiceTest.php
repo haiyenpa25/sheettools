@@ -34,4 +34,14 @@ $b7 = $service->parseChordString('B7', 'P1', 4);
 assert($b7->rootStep === 'B', "Root step should be B");
 assert($b7->kind === 'dominant', "Kind should be dominant");
 
+// 5. Harmony offset is expressed in MusicXML divisions, not raw beats.
+$tmp = tempnam(sys_get_temp_dir(), 'harmony_');
+file_put_contents($tmp, '<?xml version="1.0"?><score-partwise version="4.0"><part-list><score-part id="P1"><part-name>Music</part-name></score-part></part-list><part id="P1"><measure number="1"><attributes><divisions>4</divisions></attributes><note><rest/><duration>4</duration></note></measure></part></score-partwise>');
+$offsetChord = $service->parseChordString('G', 'P1', 1, 1.5);
+assert($service->saveHarmony($tmp, $offsetChord));
+$doc = new \DOMDocument();
+$doc->load($tmp);
+assert($doc->getElementsByTagName('offset')->item(0)?->textContent === '6', '1.5 quarter beats at divisions=4 must serialize as 6 divisions');
+unlink($tmp);
+
 echo "  [Unit] HarmonyServiceTest: PASS\n";

@@ -1,5 +1,4 @@
 import { reactive, ref } from 'vue';
-import { OmrTranscriptionService } from './OmrTranscriptionService';
 
 export interface SongbookCategory {
   slug: string;
@@ -14,7 +13,7 @@ export interface ProjectItem {
   title: string;
   composer?: string;
   date: string;
-  status: 'READY' | 'NEEDS_REVIEW' | 'PROCESSING';
+  status: 'READY' | 'NEEDS_REVIEW' | 'PROCESSING' | 'FAILED';
   verses: number;
   keySig?: string;
   timeSig?: string;
@@ -37,64 +36,12 @@ export const defaultCategories: SongbookCategory[] = [
 
 const STORAGE_KEY = 'sheet_converter_projects_v17';
 
-// Danh sách các bản nhạc chuẩn mẫu (Chỉ nạp lần đầu tiên khi chưa có dữ liệu)
-const initialProjects: ProjectItem[] = [
-  {
-    id: 'p_001',
-    title: 'TỪ CÕI LÒNG SÂU THẲM',
-    composer: 'Nguyễn Đình Tiến',
-    date: '25/08/2026',
-    status: 'READY',
-    verses: 1,
-    keySig: 'E minor / G Major',
-    timeSig: '2/4',
-    sourceFilename: '1.pdf',
-    sourceImageUrl: '/golden.png',
-    sourcePdfUrl: '/samples/002_tu_coi_long/source.pdf',
-    xmlContent: OmrTranscriptionService.generateTuCoiLongSauTham(),
-    categorySlug: 'thanh-ca-ton-vinh',
-    categoryName: 'Thánh Ca Tôn Vinh',
-    songNumber: '001',
-  },
-  {
-    id: 'p_002',
-    title: 'TRỌN CẢ TẤM LÒNG',
-    composer: 'Tôn Vinh Chúa Hằng Hữu',
-    date: '25/08/2026',
-    status: 'READY',
-    verses: 2,
-    keySig: 'G Major',
-    timeSig: '4/4',
-    sourceFilename: '2.pdf',
-    sourcePdfUrl: '/samples/003_tron_ca_tam_long/source.pdf',
-    xmlContent: OmrTranscriptionService.generateTronCaTamLong(),
-    categorySlug: 'thanh-ca-ton-vinh',
-    categoryName: 'Thánh Ca Tôn Vinh',
-    songNumber: '002',
-  },
-  {
-    id: 'p_003',
-    title: '001 HỠI THÁNH VƯƠNG, KÍP NGỰ LAI',
-    composer: 'Felice de Giardini, 1769',
-    date: '12/10/2023',
-    status: 'READY',
-    verses: 4,
-    keySig: 'G Major',
-    timeSig: '3/4',
-    sourceFilename: '001 Hỡi Thánh Vương, Kíp Ngự Lai.pdf',
-    sourcePdfUrl: '/samples/001_hoi_thanh_vuong/score.xml',
-    xmlContent: OmrTranscriptionService.generateTonVinhChanThan(),
-    categorySlug: 'thanh-ca-ton-vinh',
-    categoryName: 'Thánh Ca Tôn Vinh',
-    songNumber: '003',
-  },
-];
-
 class ProjectStore {
   public projects = reactive<ProjectItem[]>([]);
   public activeProjectId = ref<string>('p_002');
   public activeCategorySlug = ref<string>('all');
   public categories = reactive<SongbookCategory[]>([...defaultCategories]);
+  public deletedProjects = reactive<ProjectItem[]>([]);
 
   constructor() {
     this.loadFromStorage();
@@ -107,12 +54,6 @@ class ProjectStore {
       if (raw !== null) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          // Nạp và bổ sung XML nếu thiếu
-          parsed.forEach((p: ProjectItem) => {
-            if (!p.xmlContent || p.xmlContent.includes('Untitled Score') || p.xmlContent.length < 200) {
-              p.xmlContent = OmrTranscriptionService.transcribeFromFile(p.title || p.sourceFilename || '');
-            }
-          });
           this.projects.splice(0, this.projects.length, ...parsed);
           return;
         }
@@ -120,7 +61,9 @@ class ProjectStore {
     } catch (e) {
       console.warn('Failed to load projects from storage, using defaults:', e);
     }
-    this.projects.splice(0, this.projects.length, ...initialProjects);
+    // The backend library is the sole source of truth. Demo scores must only
+    // be imported through an explicit user action, never resurrected here.
+    this.projects.splice(0, this.projects.length);
     this.saveToStorage();
   }
 
@@ -138,12 +81,38 @@ class ProjectStore {
   public async syncWithBackend(): Promise<void> {
     try {
       const res = await fetch('/api/conversions').then(r => r.json()).catch(() => null);
-      if (res && Array.isArray(res.data) && res.data.length > 0) {
+      if (res && Array.isArray(res.data)) {
+        const backendUuids = new Set(res.data.map((item: any) => item.uuid).filter(Boolean));
+        for (let index = this.projects.length - 1; index >= 0; index -= 1) {
+          const project = this.projects[index];
+          if (project.uuid && !backendUuids.has(project.uuid)) {
+            this.projects.splice(index, 1);
+          }
+        }
         for (const item of res.data) {
           if (!item.uuid) continue;
           const existing = this.projects.find(p => p.id === item.uuid || p.uuid === item.uuid);
           if (existing) {
-            existing.status = item.status === 'NEEDS_REVIEW' ? 'NEEDS_REVIEW' : (item.status === 'READY' ? 'READY' : 'PROCESSING');
+            existing.status = this.normalizeStatus(item.status);
+            existing.title = item.title || existing.title;
+            existing.composer = item.composer || '';
+            existing.categorySlug = item.category_slug || '';
+            existing.categoryName = item.category_name || '';
+            existing.songNumber = item.song_number || '';
+          } else {
+            this.projects.unshift({
+              id: item.uuid,
+              uuid: item.uuid,
+              title: item.title || String(item.source_filename || 'Dự án OMR').replace(/\.[^/.]+$/, ''),
+              date: this.formatBackendDate(item.created_at),
+              status: this.normalizeStatus(item.status),
+              verses: 0,
+              sourceFilename: item.source_filename,
+              composer: item.composer || '',
+              categorySlug: item.category_slug || '',
+              categoryName: item.category_name || '',
+              songNumber: item.song_number || '',
+            });
           }
         }
         this.saveToStorage();
@@ -151,6 +120,17 @@ class ProjectStore {
     } catch (e) {
       console.log('Backend sync notice:', e);
     }
+  }
+
+  private normalizeStatus(status: string): ProjectItem['status'] {
+    if (status === 'READY' || status === 'NEEDS_REVIEW' || status === 'FAILED') return status;
+    return 'PROCESSING';
+  }
+
+  private formatBackendDate(value?: string): string {
+    if (!value) return new Date().toLocaleDateString('vi-VN');
+    const parsed = new Date(value.replace(' ', 'T'));
+    return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleDateString('vi-VN');
   }
 
   public get activeProject(): ProjectItem | undefined {
@@ -172,12 +152,12 @@ class ProjectStore {
       id: uuid || ('proj_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7)),
       uuid: uuid,
       title: title.trim() || 'Bản nhạc mới',
-      composer: 'Tác giả bài hát',
+      composer: '',
       date: dateStr,
       status: 'READY',
-      verses: 2,
-      keySig: 'G Major',
-      timeSig: '4/4',
+      verses: 0,
+      keySig: undefined,
+      timeSig: undefined,
       sourceFilename: filename,
       sourceImageUrl,
       sourcePdfUrl,
@@ -218,21 +198,14 @@ class ProjectStore {
       const proj = this.projects[idx];
       const uuid = proj.uuid || (id.length > 20 ? id : undefined);
       
-      // 1. Xóa ngay lập tức khỏi mảng reactive và lưu localStorage
-      this.projects.splice(idx, 1);
-      if (this.activeProjectId.value === id) {
-        this.activeProjectId.value = this.projects.length > 0 ? this.projects[0].id : '';
-      }
-      this.saveToStorage();
-
-      // 2. Gọi API xóa vĩnh viễn trên ổ đĩa backend
       if (uuid) {
-        try {
-          await fetch(`/api/conversions/${uuid}`, { method: 'DELETE' });
-        } catch (err) {
-          console.warn('Could not delete project from backend:', err);
-        }
+        const response = await fetch(`/api/conversions/${uuid}`, { method: 'DELETE' });
+        const result = await response.json().catch(() => null);
+        if (!response.ok || !result?.success) throw new Error(result?.message || 'Không thể xóa dự án');
       }
+      this.projects.splice(idx, 1);
+      if (this.activeProjectId.value === id) this.activeProjectId.value = this.projects[0]?.id || '';
+      this.saveToStorage();
       return true;
     }
     return false;
@@ -247,7 +220,8 @@ class ProjectStore {
       const uuid = proj.uuid || (id.length > 20 ? id : undefined);
       if (uuid) {
         // Đồng bộ siêu dữ liệu (Metadata: Title, Status)
-        if (updates.title || updates.composer || updates.status) {
+        if (updates.title !== undefined || updates.composer !== undefined || updates.status !== undefined ||
+            updates.categorySlug !== undefined || updates.categoryName !== undefined || updates.songNumber !== undefined) {
           try {
             await fetch(`/api/conversions/${uuid}`, {
               method: 'PATCH',
@@ -256,6 +230,9 @@ class ProjectStore {
                 title: proj.title,
                 composer: proj.composer,
                 status: proj.status,
+                category_slug: proj.categorySlug || '',
+                category_name: proj.categoryName || '',
+                song_number: proj.songNumber || '',
               }),
             });
           } catch (err) {
@@ -279,7 +256,7 @@ class ProjectStore {
     return this.projects.find(p => p.id === id);
   }
 
-  public updateProjectCategory(id: string, categorySlug: string, songNumber?: string): void {
+  public async updateProjectCategory(id: string, categorySlug: string, songNumber?: string): Promise<void> {
     const proj = this.projects.find(p => p.id === id);
     if (proj) {
       const cat = this.categories.find(c => c.slug === categorySlug);
@@ -287,12 +264,47 @@ class ProjectStore {
       proj.categoryName = cat?.name || categorySlug;
       if (songNumber) proj.songNumber = songNumber;
       this.saveToStorage();
+      await this.updateProject(id, {
+        categorySlug: proj.categorySlug,
+        categoryName: proj.categoryName,
+        songNumber: proj.songNumber,
+      });
     }
   }
 
   public getProjectsByCategory(categorySlug: string): ProjectItem[] {
     if (categorySlug === 'all') return this.projects;
     return this.projects.filter(p => p.categorySlug === categorySlug);
+  }
+
+  public async loadTrash(): Promise<void> {
+    const response = await fetch('/api/trash');
+    const result = await response.json().catch(() => null);
+    if (!response.ok || !Array.isArray(result?.data)) throw new Error('Không thể tải thùng rác');
+    this.deletedProjects.splice(0, this.deletedProjects.length, ...result.data.map((item: any) => ({
+      id: item.uuid,
+      uuid: item.uuid,
+      title: item.title || 'Bản nhạc chưa đặt tên',
+      composer: item.composer || '',
+      date: this.formatBackendDate(item.updated_at),
+      status: this.normalizeStatus(item.status),
+      verses: 0,
+      categorySlug: item.category_slug || '',
+      categoryName: item.category_name || '',
+      songNumber: item.song_number || '',
+    })));
+  }
+
+  public async restoreProject(uuid: string): Promise<void> {
+    const response = await fetch(`/api/trash/${uuid}/restore`, { method: 'POST' });
+    if (!response.ok) throw new Error('Không thể khôi phục bản nhạc');
+    await Promise.all([this.syncWithBackend(), this.loadTrash()]);
+  }
+
+  public async purgeProject(uuid: string): Promise<void> {
+    const response = await fetch(`/api/trash/${uuid}/purge`, { method: 'DELETE' });
+    if (!response.ok) throw new Error('Không thể xóa vĩnh viễn bản nhạc');
+    await this.loadTrash();
   }
 }
 

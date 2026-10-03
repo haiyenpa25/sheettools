@@ -30,6 +30,10 @@ class MusicXmlIndexService
             $partId = $locatorOrPartId;
         }
 
+        if (preg_match('/^[A-Za-z0-9_-]{1,32}$/D', $partId) !== 1 || $measure === null || $measure < 1 || $voice === null || $voice < 1 || $staff === null || $staff < 1 || $noteOrdinal === null || $noteOrdinal < 1) {
+            return null;
+        }
+
         $cleanPart = ltrim($partId, 'P');
         $query = sprintf(
             "//part[@id='%s' or @id='P%s' or @id='%s']/measure[@number='%d']/note",
@@ -42,7 +46,7 @@ class MusicXmlIndexService
         $nodes = $xpath->query($query);
         if (!$nodes || $nodes->length === 0) {
             // Fallback: Tìm measure không phân biệt part
-            $nodes = $xpath->query("//measure[@number='{$measure}']/note");
+            return null;
         }
 
         if (!$nodes || $nodes->length === 0) {
@@ -74,9 +78,7 @@ class MusicXmlIndexService
         }
 
         // Fallback: trả về note thứ targetIndex trong measure
-        return $nodes->item(min($targetIndex, $nodes->length - 1)) instanceof DOMElement
-            ? $nodes->item(min($targetIndex, $nodes->length - 1))
-            : null;
+        return null;
     }
 
     /**
@@ -86,10 +88,11 @@ class MusicXmlIndexService
      */
     public function getLyricCapableNotes(DOMXPath $xpath, string $partId = 'P1'): array
     {
+        if (preg_match('/^[A-Za-z0-9_-]{1,32}$/D', $partId) !== 1) return [];
         $cleanPart = ltrim($partId, 'P');
         $measures = $xpath->query("//part[@id='{$partId}' or @id='P{$cleanPart}' or @id='{$cleanPart}']/measure");
         if (!$measures || $measures->length === 0) {
-            $measures = $xpath->query("//measure");
+            return [];
         }
         if (!$measures) return [];
 

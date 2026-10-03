@@ -50,6 +50,12 @@ class ConversionService
     public function createProject(string $originalFilename, string $tempFilePath, array $options = []): ConversionProject
     {
         $ext = strtolower(pathinfo($originalFilename, PATHINFO_EXTENSION));
+        if (!in_array($ext, ['pdf', 'png', 'jpg', 'jpeg', 'xml', 'musicxml'], true)) {
+            throw new \InvalidArgumentException('Unsupported source file extension.');
+        }
+        if (!is_file($tempFilePath)) {
+            throw new \InvalidArgumentException('Uploaded source file is missing.');
+        }
         $title = pathinfo($originalFilename, PATHINFO_FILENAME);
 
         $project = new ConversionProject([
@@ -57,14 +63,18 @@ class ConversionService
             'source_filename' => $originalFilename,
             'source_type' => $ext,
             'language' => $options['language'] ?? 'vie+eng',
+            'detect_lyrics' => $options['detect_lyrics'] ?? true,
+            'detect_chords' => $options['detect_chords'] ?? true,
             'status' => 'UPLOADED',
             'progress' => 0,
             'current_step' => 'uploaded',
         ]);
 
         $this->storageService->initProjectDirs($project->uuid);
-        $savedSourcePath = $this->storageService->getSourcePath($project->uuid, $originalFilename);
-        copy($tempFilePath, $savedSourcePath);
+        $savedSourcePath = $this->storageService->getSourcePath($project->uuid, $ext);
+        if ($savedSourcePath === null || !copy($tempFilePath, $savedSourcePath)) {
+            throw new \RuntimeException('Unable to persist the uploaded source file.');
+        }
 
         $this->projectRepo->save($project);
         return $project;
@@ -73,7 +83,7 @@ class ConversionService
     /**
      * Thực thi quy trình OMR trung thực cho dự án
      */
-    public function processProject(string $uuid): bool
+    public function processProject(string $uuid, ?int $retryPageIndex = null): bool
     {
         $project = $this->projectRepo->findByUuid($uuid);
         if (!$project) return false;
@@ -85,12 +95,15 @@ class ConversionService
             $project->progress = 20;
             $this->projectRepo->save($project);
 
-            $sourcePath = $this->storageService->getSourcePath($uuid, $project->sourceFilename);
-            if (!file_exists($sourcePath)) {
-                throw new \RuntimeException("Source file missing at: {$sourcePath}");
+            $sourcePath = $this->storageService->resolveSourcePath($uuid, $project->sourceFilename, $project->sourceType);
+            if ($sourcePath === null || !file_exists($sourcePath)) {
+                throw new \RuntimeException("Source file missing for project {$uuid}");
             }
 
-            $pages = $this->preprocessService->processSource($uuid, $sourcePath, $project->sourceType);
+            $pages = $this->preprocessService->processSource($uuid, $sourcePath, $project->sourceType, $retryPageIndex !== null);
+            if ($retryPageIndex !== null && ($retryPageIndex < 0 || !isset($pages[$retryPageIndex]))) {
+                throw new \InvalidArgumentException('Requested page index is outside the document.');
+            }
 
             // Bước 2: Chạy OMR Engine
             $project->currentStep = 'recognizing_score';
@@ -99,10 +112,15 @@ class ConversionService
 
             $dto = new ConversionInputDto(
                 projectUuid: $uuid,
-                sourceFilePath: !empty($pages) ? $pages[0] : $sourcePath,
-                sourceFileName: $project->sourceFilename,
+                // The worker owns multi-page orchestration. Passing pages[0]
+                // silently discarded every page after the first one.
+                sourceFilePath: $sourcePath,
+                sourceFileName: basename($sourcePath),
                 sourceType: $project->sourceType,
-                language: $project->language
+                language: $project->language,
+                detectLyrics: $project->detectLyrics,
+                detectChords: $project->detectChords,
+                retryPageIndex: $retryPageIndex
             );
 
             /** @var OmrResultDto $result */
@@ -124,7 +142,8 @@ class ConversionService
 
             // Sao chép raw.musicxml sang current.musicxml phục vụ chỉnh sửa (Immutable Raw -> Mutable Current)
             $currentXmlPath = $this->storageService->getCurrentMusicXmlPath($uuid);
-            copy($rawXmlPath, $currentXmlPath);
+            $normalizedXmlPath = $this->storageService->getNormalizedMusicXmlPath($uuid);
+            copy(file_exists($normalizedXmlPath) ? $normalizedXmlPath : $rawXmlPath, $currentXmlPath);
 
             // Bước 4: Hoàn thành & Chuyển sang chế độ Sẵn sàng Soát lỗi (NEEDS_REVIEW)
             $project->status = 'NEEDS_REVIEW';

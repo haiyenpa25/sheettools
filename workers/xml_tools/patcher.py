@@ -7,8 +7,12 @@ import sys
 import os
 import json
 import argparse
+import re
 
 def patch_lyric(xml_path: str, part_id: str, measure_num: int, note_index: int, verse_num: int, new_text: str, syllabic: str = "single") -> bool:
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,32}", part_id) or measure_num < 1 or note_index < 0 or verse_num < 1:
+        print("ERROR: Invalid lyric locator.")
+        return False
     try:
         from lxml import etree
         use_lxml = True
@@ -25,8 +29,7 @@ def patch_lyric(xml_path: str, part_id: str, measure_num: int, note_index: int, 
     root = tree.getroot()
 
     # Tìm Measure
-    xpath_measure = f"//part[@id='{part_id}']/measure[@number='{measure_num}']"
-    measures = root.xpath(xpath_measure)
+    measures = root.xpath("//part[@id=$pid]/measure[@number=$measure]", pid=part_id, measure=str(measure_num))
     if not measures:
         print(f"ERROR: Measure {measure_num} in part {part_id} not found.")
         return False
@@ -40,7 +43,7 @@ def patch_lyric(xml_path: str, part_id: str, measure_num: int, note_index: int, 
     target_note = notes[note_index]
     
     # Tìm hoặc tạo thẻ lyric theo verse
-    existing_lyrics = target_note.xpath(f"./lyric[@number='{verse_num}']")
+    existing_lyrics = target_note.xpath("./lyric[@number=$verse]", verse=str(verse_num))
     if existing_lyrics:
         lyric_node = existing_lyrics[0]
         text_node = lyric_node.xpath("./text")

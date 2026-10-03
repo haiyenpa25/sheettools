@@ -14,6 +14,13 @@
         </div>
 
         <div class="flex items-center gap-3 w-full sm:w-auto">
+          <button
+            @click="openTrash"
+            class="px-3 py-2 bg-surface-container-low border border-border-subtle rounded-xl text-xs font-semibold text-secondary hover:text-on-surface hover:border-primary transition-colors flex items-center gap-1.5"
+          >
+            <span class="material-symbols-outlined text-base">delete</span>
+            <span>Thùng rác</span>
+          </button>
           <!-- Live Search Input -->
           <div class="relative flex-1 sm:w-64">
             <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-secondary text-lg">search</span>
@@ -32,6 +39,32 @@
             <input type="file" accept=".pdf,.png,.jpg,.jpeg,.xml,.musicxml" class="hidden" @change="onQuickUploadNewFile" />
           </label>
         </div>
+      </div>
+
+      <div v-if="trashOpen" class="fixed inset-0 z-50 bg-slate-950/70 flex items-center justify-center p-4" @click.self="trashOpen = false">
+        <section class="w-full max-w-2xl max-h-[75vh] overflow-y-auto bg-surface border border-border-subtle rounded-2xl shadow-xl p-6">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h3 class="text-lg font-bold text-on-surface">Thùng rác</h3>
+              <p class="text-xs text-secondary mt-1">Khôi phục hoặc xóa vĩnh viễn các bản nhạc.</p>
+            </div>
+            <button @click="trashOpen = false" class="p-2 text-secondary hover:text-on-surface rounded-lg"><span class="material-symbols-outlined">close</span></button>
+          </div>
+          <p v-if="trashLoading" class="text-sm text-secondary py-8 text-center">Đang tải…</p>
+          <p v-else-if="projectStore.deletedProjects.length === 0" class="text-sm text-secondary py-8 text-center">Thùng rác đang trống.</p>
+          <div v-else class="space-y-2">
+            <div v-for="item in projectStore.deletedProjects" :key="item.id" class="flex items-center justify-between gap-3 p-3 bg-surface-container-low rounded-xl border border-border-subtle">
+              <div class="min-w-0">
+                <p class="text-sm font-semibold text-on-surface truncate">{{ item.title }}</p>
+                <p class="text-xs text-secondary truncate">{{ item.composer || 'Chưa rõ tác giả' }}</p>
+              </div>
+              <div class="flex items-center gap-2 shrink-0">
+                <button @click="restoreDeleted(item.id)" class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-primary text-on-primary">Khôi phục</button>
+                <button @click="purgeDeleted(item.id, item.title)" class="px-3 py-1.5 rounded-lg text-xs font-semibold border border-error text-error hover:bg-error hover:text-white">Xóa hẳn</button>
+              </div>
+            </div>
+          </div>
+        </section>
       </div>
 
       <!-- ════════ SONGBOOKS & CATEGORIES TABS ════════ -->
@@ -147,6 +180,12 @@
               <span class="material-symbols-outlined text-xs">error_outline</span> NEEDS REVIEW
             </div>
             <div
+              v-else-if="project.status === 'FAILED'"
+              class="absolute top-2.5 right-2.5 bg-error text-white px-2.5 py-1 rounded-md font-mono-label text-[10px] font-bold flex items-center gap-1 shadow-sm"
+            >
+              <span class="material-symbols-outlined text-xs">cancel</span> FAILED
+            </div>
+            <div
               v-else
               class="absolute top-2.5 right-2.5 bg-primary text-on-primary px-2.5 py-1 rounded-md font-mono-label text-[10px] font-bold flex items-center gap-1 shadow-sm"
             >
@@ -168,13 +207,13 @@
             <!-- Meta details row -->
             <div class="flex items-center justify-between text-[11px] text-secondary border-t border-border-subtle pt-2">
               <div class="flex items-center gap-2 font-mono">
-                <span>{{ project.keySig || 'C Major' }}</span>
+                <span>{{ project.keySig || 'Chưa rõ giọng' }}</span>
                 <span>•</span>
-                <span>{{ project.timeSig || '4/4' }}</span>
+                <span>{{ project.timeSig || 'Chưa rõ nhịp' }}</span>
               </div>
               <div class="flex items-center gap-1">
                 <span class="material-symbols-outlined text-xs">lyrics</span>
-                <span>{{ project.verses }} Verse</span>
+                <span>{{ project.verses }} phiên khúc</span>
               </div>
             </div>
 
@@ -204,7 +243,7 @@
                 <button
                   @click.stop="confirmDeleteProject(project.id, project.title)"
                   class="p-1.5 text-secondary hover:text-error hover:bg-surface-container-low rounded-lg transition-colors"
-                  title="Xóa vĩnh viễn"
+                  title="Đưa vào thùng rác"
                 >
                   <span class="material-symbols-outlined text-base">delete</span>
                 </button>
@@ -228,6 +267,27 @@ const emit = defineEmits<{
 
 const searchTerm = ref<string>('');
 const statusFilter = ref<'ALL' | 'READY' | 'NEEDS_REVIEW'>('ALL');
+const trashOpen = ref(false);
+const trashLoading = ref(false);
+
+async function openTrash() {
+  trashOpen.value = true;
+  trashLoading.value = true;
+  try { await projectStore.loadTrash(); }
+  catch (error) { alert(error instanceof Error ? error.message : 'Không thể tải thùng rác.'); }
+  finally { trashLoading.value = false; }
+}
+
+async function restoreDeleted(uuid: string) {
+  try { await projectStore.restoreProject(uuid); }
+  catch (error) { alert(error instanceof Error ? error.message : 'Không thể khôi phục.'); }
+}
+
+async function purgeDeleted(uuid: string, title: string) {
+  if (!confirm(`Xóa vĩnh viễn "${title}"? Hành động này không thể hoàn tác.`)) return;
+  try { await projectStore.purgeProject(uuid); }
+  catch (error) { alert(error instanceof Error ? error.message : 'Không thể xóa vĩnh viễn.'); }
+}
 
 function getCategoryCount(slug: string): number {
   if (slug === 'all') return projectStore.projects.length;
@@ -266,13 +326,17 @@ function openProject(project: ProjectItem) {
   emit('open-project', project);
 }
 
-function onCategoryChange(projectId: string, newSlug: string) {
-  projectStore.updateProjectCategory(projectId, newSlug);
+async function onCategoryChange(projectId: string, newSlug: string) {
+  await projectStore.updateProjectCategory(projectId, newSlug);
 }
 
 async function confirmDeleteProject(id: string, title: string) {
-  if (confirm(`Bạn có chắc chắn muốn xóa bản nhạc "${title}" không? Hành động này không thể hoàn tác.`)) {
-    await projectStore.deleteProject(id);
+  if (confirm(`Đưa bản nhạc "${title}" vào thùng rác? Bạn có thể khôi phục lại sau.`)) {
+    try {
+      await projectStore.deleteProject(id);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Không thể xóa bản nhạc.');
+    }
   }
 }
 
@@ -299,7 +363,7 @@ async function exportEntireSongbook() {
 
   songs.forEach((s, idx) => {
     const num = (idx + 1).toString().padStart(3, '0');
-    toc += `[Bài ${num}] ${s.title.padEnd(40, ' ')} | Tác giả: ${(s.composer || 'Khuyết danh').padEnd(25, ' ')} | Giọng: ${s.keySig || 'C Major'}\n`;
+    toc += `[Bài ${num}] ${s.title.padEnd(40, ' ')} | Tác giả: ${(s.composer || 'Chưa rõ').padEnd(25, ' ')} | Giọng: ${s.keySig || 'Chưa xác định'}\n`;
   });
 
   toc += `\n======================================================================\n`;
