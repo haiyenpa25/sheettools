@@ -144,6 +144,12 @@
           </h2>
 
           <form class="space-y-6" @submit.prevent="saveConfig">
+            <label class="block text-sm">Cuốn sách (tuỳ chọn)
+              <input v-model="config.bookSlug" list="book-profiles" placeholder="ton-vinh-chua-hang-huu" pattern="[a-z0-9][a-z0-9-]{0,79}" class="mt-2 w-full p-2 bg-surface-container border border-border-subtle rounded" />
+              <datalist id="book-profiles"><option v-for="book in bookProfiles" :key="book.slug" :value="book.slug">{{ book.songs_seen }} bài đã xác nhận</option></datalist>
+              <span class="block mt-2 text-xs text-secondary">Dùng cùng tên cho các bài cùng cuốn để lưu những sửa chữ đã xác nhận.</span>
+            </label>
+            <button v-if="bookProfiles.some(book => book.slug === config.bookSlug)" type="button" class="text-sm text-error underline" @click="resetProfile">Xoá dữ liệu học của cuốn này</button>
             <!-- OMR Engine -->
             <div>
               <label class="block font-label-sm text-xs text-on-surface font-semibold mb-2">OMR Engine</label>
@@ -271,6 +277,7 @@ const savedNotice = ref(false);
 const targetCategorySlug = ref<string>('thanh-ca-ton-vinh');
 
 const config = reactive({
+  bookSlug: '',
   omrEngine: 'audiveris',
   langVietnamese: true,
   langEnglish: true,
@@ -278,14 +285,19 @@ const config = reactive({
   recognizeChords: true,
 });
 const CONFIG_STORAGE_KEY = 'sheettools_omr_config_v1';
+const bookProfiles=ref<{slug:string;songs_seen:number}[]>([]);
+async function loadProfiles() { try { const r=await fetch('/api/book-profiles'); if(r.ok) bookProfiles.value=(await r.json()).data; } catch { /* Profiles are optional. */ } }
+async function resetProfile() { const r=await fetch(`/api/book-profiles/${encodeURIComponent(config.bookSlug)}`,{method:'DELETE'}); if(r.ok) await loadProfiles(); }
 
 onMounted(() => {
+  void loadProfiles();
   try {
     const saved = JSON.parse(localStorage.getItem(CONFIG_STORAGE_KEY) || '{}');
     for (const key of ['langVietnamese', 'langEnglish', 'recognizeLyrics', 'recognizeChords'] as const) {
       if (typeof saved[key] === 'boolean') config[key] = saved[key];
     }
     config.omrEngine = 'audiveris';
+    if(typeof saved.bookSlug==='string' && /^[a-z0-9][a-z0-9-]{0,79}$/.test(saved.bookSlug)) config.bookSlug=saved.bookSlug;
     if (!config.recognizeLyrics) config.recognizeChords = false;
   } catch {
     localStorage.removeItem(CONFIG_STORAGE_KEY);
@@ -342,6 +354,7 @@ function formatFileSize(bytes: number): string {
 
 function saveConfig() {
   localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify({
+    bookSlug: config.bookSlug,
     omrEngine: 'audiveris',
     langVietnamese: config.langVietnamese,
     langEnglish: config.langEnglish,

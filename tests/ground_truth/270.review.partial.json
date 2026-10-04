@@ -1,0 +1,12 @@
+{
+  "source_sha256": "68735aad8563c376cee765421eb36ac9a816ca62735373d268b2f3aecd2b59d5",
+  "verified": true,
+  "scope": "Known incorrect measures only; not a complete accuracy benchmark. Notes/chords are transcribed in 270.manual.json.",
+  "sources": [{"song_id": "270", "source_sha256": "68735aad8563c376cee765421eb36ac9a816ca62735373d268b2f3aecd2b59d5", "manually_verified": true}],
+  "measures": [
+    {"id": "p1_P1_s2_m3", "correct": false, "reason": "Missing final G4 quarter triplet"},
+    {"id": "p1_P1_s2_m5", "correct": false, "reason": "Missing final Bb4 quarter triplet"},
+    {"id": "p2_P1_s1_m2", "correct": false, "reason": "Missing C harmony"},
+    {"id": "p2_P1_s2_m5", "correct": false, "reason": "Eb minor harmony read as E minor"}
+  ]
+}

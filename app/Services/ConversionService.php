@@ -57,9 +57,12 @@ class ConversionService
             throw new \InvalidArgumentException('Uploaded source file is missing.');
         }
         $title = pathinfo($originalFilename, PATHINFO_FILENAME);
+        $bookSlug = $options['book_slug'] ?? '';
+        if (!is_string($bookSlug) || ($bookSlug !== '' && !preg_match('/^[a-z0-9][a-z0-9-]{0,79}$/',$bookSlug))) throw new \InvalidArgumentException('Invalid book slug');
 
         $project = new ConversionProject([
             'title' => $title,
+            'book_slug' => $bookSlug,
             'source_filename' => $originalFilename,
             'source_type' => $ext,
             'language' => $options['language'] ?? 'vie+eng',

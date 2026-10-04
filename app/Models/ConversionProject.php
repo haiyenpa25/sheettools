@@ -16,6 +16,7 @@ class ConversionProject
     public string $categorySlug;
     public string $categoryName;
     public string $songNumber;
+    public string $bookSlug;
     public string $status; // UPLOADED, QUEUED, PROCESSING, NEEDS_REVIEW, READY, FAILED
     public string $sourceFilename;
     public string $sourceType; // pdf, png, jpg
@@ -37,6 +38,7 @@ class ConversionProject
         $this->categorySlug = $attributes['category_slug'] ?? '';
         $this->categoryName = $attributes['category_name'] ?? '';
         $this->songNumber = $attributes['song_number'] ?? '';
+        $this->bookSlug = $attributes['book_slug'] ?? '';
         $this->status = $attributes['status'] ?? 'UPLOADED';
         $this->sourceFilename = $attributes['source_filename'] ?? 'unknown.pdf';
         $this->sourceType = $attributes['source_type'] ?? 'pdf';
@@ -70,6 +72,7 @@ class ConversionProject
             'category_slug' => $this->categorySlug,
             'category_name' => $this->categoryName,
             'song_number' => $this->songNumber,
+            'book_slug' => $this->bookSlug,
             'status' => $this->status,
             'source_filename' => $this->sourceFilename,
             'source_type' => $this->sourceType,

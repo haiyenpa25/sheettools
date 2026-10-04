@@ -20,6 +20,7 @@ $tests = [
         __DIR__ . '/Unit/ImagePreprocessServiceTest.php',
         __DIR__ . '/Unit/StorageServiceTest.php',
         __DIR__ . '/Unit/ChorusExportTest.php',
+        __DIR__ . '/Unit/ReviewQueueServiceTest.php',
         __DIR__ . '/Unit/SecurityBoundaryTest.php',
         __DIR__ . '/Unit/ProjectLibraryTest.php',
     ],
@@ -58,7 +59,7 @@ foreach ($tests as $groupName => $files) {
     echo "\n";
 }
 
-foreach (['TextRolesTest.py', 'DiacriticFusionTest.py', 'PageModelTest.py', 'OmrAnchorsTest.py', 'ChordAnchoringTest.py', 'LyricStructureTest.py', 'LyricAssemblyTest.py', 'RoadmapBenchmarkTest.py', 'PdfExtractionTest.py', 'PageSourceTest.py', 'PageProgressTest.py', 'PageWorkerRetryTest.py', 'PageLayoutTest.py', 'PreprocessDebugTest.py', 'ImageQualityTest.py', 'ZipInputTest.py', 'NotationLayerTest.py', 'SemanticMergeTest.py', 'StaffAndLyricSegmentationTest.py', 'HeaderSemanticsTest.py', 'VietnameseContextTest.py', 'NotationOnlyModeTest.py', 'LyricsArtifactTest.py', 'LyricsAlignmentTest.py', 'MultiPartLyricsAlignmentTest.py', 'ValidatorDurationTest.py', 'ValidatorStructureTest.py', 'AccuracyReportTest.py', 'MultiPageMergerTest.py'] as $pythonTestName) {
+foreach (['TextRolesTest.py', 'DiacriticFusionTest.py', 'PageModelTest.py', 'OmrAnchorsTest.py', 'ChordAnchoringTest.py', 'LyricStructureTest.py', 'LyricAssemblyTest.py', 'RoadmapBenchmarkTest.py', 'PdfExtractionTest.py', 'PageSourceTest.py', 'PageProgressTest.py', 'PageWorkerRetryTest.py', 'PageLayoutTest.py', 'PreprocessDebugTest.py', 'ImageQualityTest.py', 'ZipInputTest.py', 'NotationLayerTest.py', 'SemanticMergeTest.py', 'StaffAndLyricSegmentationTest.py', 'HeaderSemanticsTest.py', 'VietnameseContextTest.py', 'NotationOnlyModeTest.py', 'LyricsArtifactTest.py', 'LyricsAlignmentTest.py', 'MultiPartLyricsAlignmentTest.py', 'ValidatorDurationTest.py', 'ValidatorStructureTest.py', 'AccuracyReportTest.py', 'MultiPageMergerTest.py', 'OmrChecksTest.py', 'SectionContinuityTest.py', 'RepairEvidenceTest.py', 'ReviewBenchmarkTest.py'] as $pythonTestName) {
     $totalSuites++;
     $pythonTest = __DIR__ . '/Python/' . $pythonTestName;
     $pythonOutput = [];

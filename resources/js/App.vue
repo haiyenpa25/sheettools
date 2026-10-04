@@ -265,6 +265,7 @@ async function startConversion(file: File, config: any) {
 
   const formData = new FormData();
   formData.append('file', file);
+  formData.append('book_slug', config?.bookSlug || '');
   formData.append('language', config?.langVietnamese && config?.langEnglish ? 'vie+eng' : (config?.langVietnamese ? 'vie' : 'eng'));
   formData.append('detect_lyrics', config?.recognizeLyrics === false ? '0' : '1');
   formData.append('detect_chords', config?.recognizeChords === false ? '0' : '1');

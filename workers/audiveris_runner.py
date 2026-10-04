@@ -223,7 +223,8 @@ def _load_page_checkpoint(path: str, require_lyrics: bool = False, source_sha256
             required.append(result.get("lyrics_artifact_path"))
         if source_sha256 is not None and result.get("source_sha256") != source_sha256:
             return None
-        if result.get('pipeline_version') != 'roadmap1_v2':
+        # Roadmap 2 audits cached recognition independently; it does not require replacing RAW/OMR.
+        if result.get('pipeline_version') not in ('roadmap2_v1','roadmap1_v2'):
             return None
         return result if result.get("success") and all(p and os.path.isfile(p) for p in required) else None
     except (OSError, ValueError, TypeError):
@@ -232,7 +233,7 @@ def _load_page_checkpoint(path: str, require_lyrics: bool = False, source_sha256
 
 def _save_page_checkpoint(path: str, result: dict) -> None:
     checkpoint = {key: value for key, value in result.items() if key != "log"}
-    checkpoint['pipeline_version'] = 'roadmap1_v2'
+    checkpoint['pipeline_version'] = 'roadmap2_v1'
     temporary = path + ".tmp"
     with open(temporary, "w", encoding="utf-8") as checkpoint_file:
         json.dump(checkpoint, checkpoint_file, ensure_ascii=False, indent=2)
@@ -476,6 +477,10 @@ def process(
                 page_results.append(page_result)
                 progress.complete_page(page_index)
 
+            from omr_checks.section_continuity import update_page_sections
+            update_page_sections(page_results)
+            from omr_checks.pipeline import audit_merged
+            review_artifacts = audit_merged(page_results, output_dir)
             from xml_tools.page_merger import merge_musicxml_pages
             raw_pages = [item["raw_xml_path"] for item in page_results]
             enriched_pages = [item["xml_path"] for item in page_results]
@@ -500,6 +505,7 @@ def process(
                 )
             return {
                 "success": True,
+                **review_artifacts,
                 "xml_path": merged_enriched,
                 "raw_xml_path": merged_raw,
                 "page_count": len(page_results),
@@ -544,6 +550,8 @@ def process(
     try:
         from xml_tools.vietnamese_universal_ocr import decompose_sheet_3zones
         decomp = decompose_sheet_3zones(final_png, page_model=page_model)
+        from omr_checks.book_profile import apply_book_profile
+        apply_book_profile(decomp, output_dir)
         import cv2
         model = decomp.get('page_model')
         if model is not None:
@@ -669,6 +677,7 @@ def process(
                     result["lyrics_artifact_path"],
                     acceptance_threshold=float(os.getenv('LYRIC_ALIGNMENT_THRESHOLD', '0.55')),
                     note_anchors_path=result.get('note_anchors_path'),
+                    word_anchor_fraction=decomp_meta.get('book_profile_params', {}).get('lyric_anchor_fraction'),
                 )
                 lyric_stats = confidence_summary(decomp_meta.get("lyrics", []))
                 result["xml_path"] = enriched_path
@@ -714,6 +723,9 @@ def process(
         result["xml_path"] = write_without_chords(result["xml_path"], without_chords)
         result["chords_included"] = False
 
+    if result.get('success') and result.get('xml_path'):
+        from omr_checks.pipeline import audit_page
+        audit_page(result, output_dir, source_page_number)
     return result
 
 

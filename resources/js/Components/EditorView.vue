@@ -1,5 +1,7 @@
 <template>
   <div class="flex-1 flex flex-col min-w-0 bg-workspace-bg overflow-hidden h-full">
+    <MeasureReviewQueue v-if="showMeasureReview && projectUuid" :uuid="projectUuid" :xml="xmlContent" @close="showMeasureReview = false" @updated="emit('update:xmlContent', $event)" @edit="openReviewMeasure" />
+    <button v-if="projectUuid" class="p-2 bg-surface-container border-b border-border-subtle text-primary text-sm text-left" @click="showMeasureReview = true">Soát từng ô nhịp</button>
     <!-- ════════════════════════════════ TOP ADVANCED TOOLBAR ════════════════════════════════ -->
     <div class="h-13 bg-surface-container-lowest border-b border-border-subtle flex items-center justify-between px-4 shrink-0 select-none gap-3 flex-wrap">
       <!-- Left: Project title & Quick Info -->
@@ -1218,6 +1220,9 @@ import { OpenSheetMusicDisplay } from 'opensheetmusicdisplay';
 import { MusicXmlEngine, type ParsedLyric, type ParsedHarmony, type ParsedNoteDetail } from '../Services/MusicXmlEngine';
 import { AudioPlaybackEngine } from '../Services/AudioPlaybackEngine';
 import LyricSections from './LyricSections.vue';
+import MeasureReviewQueue from './MeasureReviewQueue.vue';
+const showMeasureReview = ref(false);
+function openReviewMeasure(number: number) { activeMeasure.value=number; activeTab.value='note'; drawerCollapsed.value=false; loadMeasureNotes(number); }
 
 const props = defineProps<{
   projectTitle: string;
@@ -2295,6 +2300,7 @@ async function initXml(xmlString: string) {
 
 // Global Keyboard Shortcuts (Ctrl+Z, Ctrl+Y, Space for play, Arrows for measures & note pitches)
 function handleKeydown(e: KeyboardEvent) {
+  if(showMeasureReview.value) return;
   const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
   if (tag === 'input' || tag === 'textarea' || tag === 'select') {
     return;

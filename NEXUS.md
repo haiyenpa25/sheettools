@@ -231,6 +231,19 @@ Tất cả các bài kiểm tra trong `tests/Feature/ApiTest.php` đều vượt
 
 ## 6. NOTATION-FIRST OMR & TÍNH TRUNG THỰC
 
+### Roadmap 2: kiểm chéo và soát từng ô nhịp
+
+- `workers/omr_checks/head_counter.py`, `tuplet_marks.py`, `ink_scan.py`: bằng chứng ảnh độc lập với ID đầu nốt Audiveris; vùng mực chưa giải thích được đọc lại bằng crop OCR, chỉ tạo cảnh báo.
+- `workers/omr_checks/ledger.py` → `rules/c1.py` … `c10.py` → `decide.py`: sổ ô theo page/part/staff/local/global measure, số nốt/âm tiết/phách, bằng chứng ảnh và quyết định. Chưa có xác suất accuracy từ OCR confidence.
+- `pipeline.py`: kiểm từng trang và hợp nhất sổ; kế thừa số phách qua trang và kiểm cặp nhịp lấy đà/cuối bài. `section_continuity.py` cập nhật section trên XML dẫn xuất, giữ RAW bất biến.
+- `repair.py`: đọc lại toàn hệ 2× trong thư mục riêng cho mỗi lần chạy; đối chiếu cao độ, đầu nốt, số 3, hoá biểu và phách trước khi đưa ra candidate. Candidate được gắn hash CURRENT; không tự áp dụng nốt.
+- `backfill.py`: thêm sổ/hàng đợi cho checkpoint cũ, không nhận diện lại RAW/.omr. Bản CURRENT đã sửa tay được giữ nguyên và đưa toàn bộ vào soát.
+- `app/Services/ReviewQueueService.php`: API queue/build/repair/review, kiểm hash phiên bản, khóa ghi, lưu log giây/thao tác, sửa metadata/candidate, hoàn tác XML và metadata. `RecognitionIssue` là DTO cảnh báo trả về.
+- `app/Services/BookProfileService.php` + `workers/omr_checks/book_profile.py`: hồ sơ cuốn tại `storage/profiles/{slug}.json`; học anchor từ ACCEPT, học chữ sau xác nhận và chỉ áp dụng khi đủ ba sự kiện riêng cùng ngữ cảnh. Không học nốt. DELETE profile chỉ xóa dữ liệu học.
+- `resources/js/Services/MeasureReviewService.ts`, `Components/MeasureReviewQueue.vue`: ảnh nguồn cắt cạnh OSMD một ô, metadata ở đầu, lý do/gợi ý/phím tắt; đồng bộ XML với Editor/App qua sự kiện hiện có.
+- `workers/evaluation/review_benchmark.py`: precision/coverage/review load/human seconds theo commit, kiểm hash nguồn; báo null nếu thiếu nhãn. `tests/ground_truth/270.review.partial.json` chỉ có bốn ô lỗi đã biết, không phải benchmark toàn bài.
+- Tình trạng các cổng nghiệm thu và giới hạn: `ROADMAP2_STATUS.md`. Không coi build UI hay 49 nhóm test là bằng chứng đạt 99% accuracy.
+
 - `workers/preprocessing/notation_layers.py`: Tạo lớp ảnh dành riêng cho OMR nốt. Các hành lang khuông nhạc được bảo vệ; hộp OCR chạm vào khuông không bao giờ bị xóa. Không vẽ lại dòng khuông để tránh sinh ký hiệu giả.
 - `workers/xml_tools/vietnamese_universal_ocr.py`: OCR lời chạy thành lớp độc lập, giữ tọa độ và confidence; chỉ các hộp chữ nằm ngoài vùng ký hiệu được loại khỏi ảnh notation.
 - `workers/audiveris_runner.py`: Chạy Audiveris với `-save`, giữ `raw_audiveris.musicxml`, tạo `notation_with_lyrics.musicxml` dẫn xuất và xử lý từng trang PDF trước khi merge.

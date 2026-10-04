@@ -108,7 +108,7 @@ def _normalized_positions(items: list[dict]) -> list[float]:
     return [(value - low) / span for value in values]
 
 
-def _align_group(words: list[dict], notes: list[dict]) -> list[tuple[int, int, float]]:
+def _align_group(words: list[dict], notes: list[dict], word_anchor_fraction: float | None = None) -> list[tuple[int, int, float]]:
     """Needleman-Wunsch style monotonic matching with note/token gap penalties."""
     if not words or not notes:
         return []
@@ -120,7 +120,7 @@ def _align_group(words: list[dict], notes: list[dict]) -> list[tuple[int, int, f
     if pixel:
         # Measured on hymn 270: syllable centres sit on the notehead (median 0.00,
         # sd 0.16 interline); a left-biased anchor penalised every long word.
-        anchor_fraction = float(os.getenv('LYRIC_ALIGN_WORD_ANCHOR', '0.5'))
+        anchor_fraction = word_anchor_fraction if word_anchor_fraction is not None else float(os.getenv('LYRIC_ALIGN_WORD_ANCHOR', '0.5'))
         word_x = [(float(word['box'][0])+anchor_fraction*(float(word['box'][2])-float(word['box'][0])))/scale
                   if len(word.get('box', [])) == 4 else float(word.get('x', 0))/scale for word in words]
     elif len(words) == 1 and len(notes) > 1:
@@ -195,6 +195,7 @@ def align_lyrics_artifact(
     output_artifact_path: str | None = None,
     acceptance_threshold: float = 0.55,
     note_anchors_path: str | None = None,
+    word_anchor_fraction: float | None = None,
 ) -> dict:
     tree = ET.parse(musicxml_path)
     root = tree.getroot()
@@ -255,7 +256,7 @@ def align_lyrics_artifact(
             review += len(group_words)
             continue
         ordered_words = sorted(group_words, key=lambda item: (float(item.get('x', 0)), int(item.get('sequence', 0))))
-        matches = _align_group(ordered_words, group_notes)
+        matches = _align_group(ordered_words, group_notes, word_anchor_fraction)
         matched_word_indexes = set()
         for word_index, note_index, spatial_error in matches:
             word = ordered_words[word_index]

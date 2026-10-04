@@ -26,6 +26,8 @@ use App\Services\NoteService;
 use App\Services\ExportService;
 use App\Services\JobQueueService;
 use App\Services\PageArtifactService;
+use App\Services\ReviewQueueService;
+use App\Services\BookProfileService;
 use App\DTOs\LyricDto;
 use App\DTOs\NoteEditDto;
 use App\Repositories\ConversionProjectRepository;
@@ -70,6 +72,12 @@ if ($apiToken !== '') {
 if ($uri === '/api/health/full' && $method === 'GET') {
     jsonResponse($healthService->checkAll());
 }
+if ($uri === '/api/book-profiles' && $method === 'GET') {
+    jsonResponse(['data'=>(new BookProfileService())->list()]);
+}
+if (preg_match('#^/api/book-profiles/([a-z0-9][a-z0-9-]{0,79})$#',$uri,$bookMatch) && $method==='DELETE') {
+    (new BookProfileService())->reset($bookMatch[1]); jsonResponse(['success'=>true]);
+}
 
 // 2. List or Create Conversions
 if ($uri === '/api/conversions') {
@@ -82,6 +90,7 @@ if ($uri === '/api/conversions') {
 
     if ($method === 'POST') {
         $language = $_POST['language'] ?? 'vie+eng';
+        $bookSlug = $_POST['book_slug'] ?? '';
         $detectLyrics = filter_var($_POST['detect_lyrics'] ?? true, FILTER_VALIDATE_BOOLEAN);
         $detectChords = filter_var($_POST['detect_chords'] ?? true, FILTER_VALIDATE_BOOLEAN);
 
@@ -108,6 +117,7 @@ if ($uri === '/api/conversions') {
             }
             try {
                 $project = $conversionService->createProject((string)$file['name'], (string)$file['tmp_name'], [
+                'book_slug' => $bookSlug,
                 'language' => $language,
                 'detect_lyrics' => $detectLyrics,
                 'detect_chords' => $detectChords,
@@ -221,6 +231,26 @@ if (preg_match('#^/api/conversions/([a-zA-Z0-9_\-]+)(/.*)?$#', $uri, $matches)) 
             $repo->save($project);
             jsonResponse(['success' => true, 'data' => $project->toArray()]);
         }
+    }
+
+    if ($subPath === '/review-queue/build' && $method === 'POST') {
+        try { jsonResponse((new ReviewQueueService($storageService))->buildQueue($uuid)); }
+        catch (\RuntimeException $e) { jsonResponse(['error'=>'REVIEW_BUILD_FAILED','message'=>$e->getMessage()],409); }
+    }
+    if ($subPath === '/review-queue' && $method === 'GET') {
+        try { jsonResponse((new ReviewQueueService($storageService))->getQueue($uuid, ($_GET['all'] ?? '') === '1')); }
+        catch (RuntimeException $e) { jsonResponse(['error'=>'REVIEW_NOT_READY','message'=>$e->getMessage()],409); }
+    }
+    if (preg_match('#^/review/([a-zA-Z0-9_-]+)/repair$#', $subPath, $reviewMatch) && $method === 'POST') {
+        try { jsonResponse((new ReviewQueueService($storageService))->requestRepair($uuid,$reviewMatch[1])); }
+        catch (InvalidArgumentException $e) { jsonResponse(['error'=>'INVALID_REVIEW','message'=>$e->getMessage()],422); }
+        catch (RuntimeException $e) { jsonResponse(['error'=>'REPAIR_FAILED','message'=>$e->getMessage()],409); }
+    }
+    if (preg_match('#^/review/([a-zA-Z0-9_-]+)$#', $subPath, $reviewMatch) && $method === 'POST') {
+        $input = json_decode(file_get_contents('php://input'),true) ?: [];
+        try { jsonResponse((new ReviewQueueService($storageService))->record($uuid,$reviewMatch[1],$input)); }
+        catch (InvalidArgumentException $e) { jsonResponse(['error'=>'INVALID_REVIEW','message'=>$e->getMessage()],422); }
+        catch (RuntimeException $e) { jsonResponse(['error'=>'STALE_REVIEW','message'=>$e->getMessage()],409); }
     }
 
     // GET, PUT, PATCH /api/conversions/{uuid}/musicxml
