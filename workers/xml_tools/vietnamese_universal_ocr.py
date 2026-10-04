@@ -297,6 +297,77 @@ class VietnameseUniversalOcrEngine:
             print(f"[VietnameseOCR] Tesseract crop notice: {exc}")
             return "", 0.0
 
+    def recognize_line_tesseract(self, img_crop: np.ndarray, scale: float = 1.0) -> str:
+        """Read a whole lyric line; line context keeps Vietnamese marks far better than word crops."""
+        if img_crop is None or img_crop.size == 0:
+            return ""
+        try:
+            import pytesseract
+            resized = cv2.resize(img_crop, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC) if scale != 1.0 else img_crop
+            padded = cv2.copyMakeBorder(resized, 20, 20, 20, 20, cv2.BORDER_CONSTANT, value=(255, 255, 255))
+            return pytesseract.image_to_string(padded, lang="vie", config="--oem 1 --psm 7").strip()
+        except Exception as exc:
+            print(f"[VietnameseOCR] Tesseract line notice: {exc}")
+            return ""
+
+    def fuse_lyric_line(self, img: np.ndarray, items: list[dict]) -> None:
+        """Restore marks on detector tokens of one lyric row using whole-line readings."""
+        from xml_tools.vi_lexicon import vietnamese_syllables
+        from xml_tools.vi_syllable import fuse_line
+        words = [it for it in items if not re.fullmatch(r'\d+[.)]', str(it['text']).strip())]
+        if not words:
+            return
+        h, w = img.shape[:2]
+        x1 = max(0, min(it['box'][0] for it in words) - 10)
+        y1 = max(0, min(it['box'][1] for it in words) - 4)
+        x2 = min(w, max(it['box'][2] for it in words) + 10)
+        y2 = min(h, max(it['box'][3] for it in words) + 4)
+        crop = img[y1:y2, x1:x2]
+        line_readings = [(text, 1.0) for text in (self.recognize_line_tesseract(crop, 1.0),
+                                                   self.recognize_line_tesseract(crop, 1.5)) if text]
+        base_tokens, token_readings = [], []
+        for it in words:
+            candidates = it.get('ocr_candidates', [])
+            rapid = next((c['text'] for c in candidates if c.get('engine') == 'rapidocr' and c.get('scope') != 'line'), None)
+            base_tokens.append(str(rapid if rapid and rapid.strip() else it['text']).strip())
+            token_readings.append([(c['text'], .5) for c in candidates
+                                   if c.get('engine') in ('tesseract', 'vietocr') and c.get('scope') != 'line' and c.get('text')])
+        fused = fuse_line(base_tokens, line_readings, token_readings, vietnamese_syllables())
+        for it, base, result in zip(words, base_tokens, fused):
+            rapid_conf = max((float(c.get('confidence', 0)) for c in it.get('ocr_candidates', []) if c.get('engine') == 'rapidocr'), default=float(it.get('score', 0)))
+            confidence = rapid_conf * (.6 + .4 * float(result['support']))
+            if result['needs_review']:
+                confidence = min(confidence, .5)
+            it['text'] = unicodedata.normalize('NFC', result['text'])
+            it['score'] = round(confidence, 4)
+            it['ocr_engine'] = 'fusion:' + result['source']
+            it['diacritic_fusion'] = {'base': base, 'line_readings': [text for text, _ in line_readings], **result}
+
+    def reocr_chord_box(self, img: np.ndarray, box: list[int]) -> tuple[str, float] | None:
+        """Re-read a short above-staff box as chord symbols.
+
+        Superscript flats (B♭, E♭) are misread on the full page ("48", "4日");
+        a padded, upscaled crop is read reliably. Only a result in which every
+        token satisfies the chord grammar is returned.
+        """
+        rapid = self.get_rapid_ocr()
+        if rapid is None:
+            return None
+        h, w = img.shape[:2]
+        x1, y1, x2, y2 = box
+        crop = img[max(0, y1 - 6):min(h, y2 + 6), max(0, x1 - 8):min(w, x2 + 8)]
+        if crop.size == 0:
+            return None
+        crop = cv2.copyMakeBorder(crop, 20, 20, 20, 20, cv2.BORDER_CONSTANT, value=(255, 255, 255))
+        for scale in (2.0, 1.0, 3.0):
+            resized = cv2.resize(crop, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
+            results, _ = rapid(resized)
+            results = sorted(results or [], key=lambda item: item[0][0][0])
+            tokens = [token for item in results for token in str(item[1]).split()]
+            if tokens and all(is_chord(token) for token in tokens):
+                return ' '.join(tokens), min(float(item[2]) for item in results)
+        return None
+
     def isolate_text_layer(self, img: np.ndarray) -> np.ndarray:
         """
         Xóa đường kẻ khuông và đuôi nốt để tạo lớp ảnh văn bản tinh khiết (Pure Text Layer).
@@ -471,6 +542,19 @@ class VietnameseUniversalOcrEngine:
                         break
                 if system_id:
                     break
+            compact = text.replace(' ', '')
+            # Every short above-staff box is re-read: a dropped superscript flat
+            # still yields a grammatical chord ("BM7" for B♭M7) with high confidence.
+            if band_name == 'above' and len(compact) <= 14 and box_h <= 3.5 * interline:
+                chord_reading = self.reocr_chord_box(img, [x1, y1, x2, y2])
+                if chord_reading:
+                    text, chord_confidence = chord_reading
+                    candidates.append({'text': text, 'confidence': chord_confidence, 'engine': 'rapidocr_chord_crop'})
+                    data_item.update({'text': text, 'score': chord_confidence, 'ocr_engine': 'rapidocr_chord_crop'})
+                elif all(is_chord(token) for token in str(raw_text).split()):
+                    # Tesseract confidence on chord glyphs is meaningless; keep the detector's.
+                    data_item.update({'text': str(raw_text).strip(), 'score': float(score), 'ocr_engine': 'rapidocr'})
+                    text = data_item['text']
             line_role = classify_text_line(text, band_name)
             if cy > h*.9 and re.fullmatch(r'\d{1,4}', text):
                 line_role['role'] = 'footer'
@@ -588,6 +672,7 @@ class VietnameseUniversalOcrEngine:
 
             for v_idx, vl in enumerate(verse_lines):
                 vl_sorted = sorted(vl, key=lambda x: x['cx'])
+                self.fuse_lyric_line(img, vl_sorted)
                 for it in vl_sorted:
                     all_lyrics_flat.append({
                         'staff_index': s_idx,
@@ -606,6 +691,7 @@ class VietnameseUniversalOcrEngine:
                         'raw_ocr': it.get('raw_ocr'),
                         'ocr_candidates': it.get('ocr_candidates', []),
                         'context_changes': it.get('context_changes', []),
+                        'diacritic_fusion': it.get('diacritic_fusion'),
                     })
 
         # A sung phrase can continue at the next system. Run context over the

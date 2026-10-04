@@ -37,7 +37,7 @@ def analyze_header_semantics(items: list[dict], page_width: int, first_staff_top
     candidates.sort(key=lambda item: (float(item.get("cy", 0)), float(item.get("cx", 0))))
     prefixes = {'composer': r'^(?:Nhạc|Music|Composer)\s*:\s*',
                 'lyricist': r'^(?:Lời|Lyrics|Lyricist)\s*:\s*',
-                'translator': r'^(?:Dịch|Lời dịch|Translator)\s*:\s*',
+                'translator': r'^(?:Dịch|Lời dịch|Lời Việt|LV|Phỏng dịch|PD|Translator)\s*:\s*',
                 'note': r'^(?:Chú thích|Ghi chú|Note)\s*:\s*'}
     explicit = {}
     for role, pattern in prefixes.items():
@@ -82,6 +82,14 @@ def analyze_header_semantics(items: list[dict], page_width: int, first_staff_top
                                 max(item['box'][2] for item in title_items), max(item['box'][3] for item in title_items)],
                            confidence=min(float(item.get('score', 0)) for item in title_items))
     title_ids = {id(item) for item in title_items}
+    leading_number = re.match(r'^(#?\d{1,4}[A-Za-z]?)\s+(\S.*)$', title_field.get('text', ''))
+    if number is None and leading_number:
+        # Hymnals often print the number on the title line: "270 TÔI BIẾT ...".
+        x1, y1, x2, y2 = title['box']
+        split_x = x1 + int((x2 - x1) * (len(leading_number.group(1)) + .5) / max(len(title_field['text']), 1))
+        number = {**title, 'text': leading_number.group(1), 'box': [x1, y1, split_x, y2]}
+        title_field['text'] = leading_number.group(2)
+        title_field['box'] = [split_x, y1, x2, y2] if len(title_items) == 1 else title_field['box']
 
     title_y = float(title.get("cy", 0)) if title else first_staff_top
     collection = next((

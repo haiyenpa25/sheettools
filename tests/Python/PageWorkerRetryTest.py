@@ -36,7 +36,10 @@ class PageWorkerRetryTest(unittest.TestCase):
                 folder.mkdir(parents=True, exist_ok=True)
                 raw = folder / "raw.musicxml"
                 raw.write_text(SCORE)
-                return {"success": True, "raw_xml_path": str(raw), "xml_path": str(raw)}
+                document = folder / 'document.json'
+                document.write_text(json.dumps({'composer': {'text': 'First page composer'}}))
+                return {"success": True, "raw_xml_path": str(raw), "xml_path": str(raw),
+                        'document_artifact_path': str(document)}
 
             def fake_merge(_paths, destination, _title):
                 Path(destination).write_text(SCORE)
@@ -45,7 +48,9 @@ class PageWorkerRetryTest(unittest.TestCase):
             with patch.object(audiveris_runner, "find_audiveris_cli", return_value="fake"), \
                  patch.object(audiveris_runner, "process", side_effect=fake_process), \
                  patch.object(page_merger, "merge_musicxml_pages", side_effect=fake_merge):
-                self.assertTrue(original_process(str(source), str(output), include_lyrics=False, pages_dir=str(pages))["success"])
+                result = original_process(str(source), str(output), include_lyrics=False, pages_dir=str(pages))
+                self.assertTrue(result["success"])
+                self.assertEqual(str(output / 'page_result_0001' / 'document.json'), result.get('document_artifact_path'))
                 self.assertEqual(["page-001.png", "page-002.png"], calls)
                 calls.clear()
                 self.assertTrue(original_process(str(source), str(output), include_lyrics=False,

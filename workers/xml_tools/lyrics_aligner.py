@@ -118,7 +118,10 @@ def _align_group(words: list[dict], notes: list[dict]) -> list[tuple[int, int, f
     scale = max(float(notes[0].get('interline', 1)), 1)
     note_x = [float(note['x'])/scale for note in notes] if pixel else _normalized_positions(notes)
     if pixel:
-        word_x = [(float(word['box'][0])+.4*(float(word['box'][2])-float(word['box'][0])))/scale
+        # Measured on hymn 270: syllable centres sit on the notehead (median 0.00,
+        # sd 0.16 interline); a left-biased anchor penalised every long word.
+        anchor_fraction = float(os.getenv('LYRIC_ALIGN_WORD_ANCHOR', '0.5'))
+        word_x = [(float(word['box'][0])+anchor_fraction*(float(word['box'][2])-float(word['box'][0])))/scale
                   if len(word.get('box', [])) == 4 else float(word.get('x', 0))/scale for word in words]
     elif len(words) == 1 and len(notes) > 1:
         note_values = [float(item.get('x', 0.0)) for item in notes]

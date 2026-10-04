@@ -42,10 +42,14 @@ class PageSourceTest(unittest.TestCase):
                 "raw_xml_path": str(raw),
                 "xml_path": str(score),
                 "source_sha256": hashlib.sha256(b"page one").hexdigest(),
-                "pipeline_version": "roadmap1_v1",
+                "pipeline_version": "roadmap1_v2",
             }))
             self.assertIsNotNone(_load_page_checkpoint(str(checkpoint), source_sha256=hashlib.sha256(b"page one").hexdigest()))
             self.assertIsNone(_load_page_checkpoint(str(checkpoint), source_sha256=hashlib.sha256(b"page two").hexdigest()))
+            old_checkpoint = json.loads(checkpoint.read_text())
+            old_checkpoint['pipeline_version'] = 'roadmap1_v1'
+            checkpoint.write_text(json.dumps(old_checkpoint))
+            self.assertIsNone(_load_page_checkpoint(str(checkpoint), source_sha256=hashlib.sha256(b"page one").hexdigest()))
             checkpoint.write_text(json.dumps({"success": True, "raw_xml_path": str(raw), "xml_path": str(score)}))
             self.assertIsNone(_load_page_checkpoint(str(checkpoint), source_sha256=hashlib.sha256(b"page one").hexdigest()))
 

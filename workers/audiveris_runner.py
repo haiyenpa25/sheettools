@@ -133,6 +133,7 @@ def write_lyrics_artifact(decomp_meta: dict, destination_path: str, page_number:
             "raw_ocr": item.get("raw_ocr"),
             "ocr_candidates": item.get("ocr_candidates", []),
             "context_changes": item.get("context_changes", []),
+            "diacritic_fusion": item.get("diacritic_fusion"),
             **{key: item[key] for key in ('system_id', 'section_id', 'section_type', 'lyric_name', 'row_offset',
                                          'box_source', 'geometry_needs_review', 'poem_stanza') if key in item},
             "alignment": None,
@@ -222,7 +223,7 @@ def _load_page_checkpoint(path: str, require_lyrics: bool = False, source_sha256
             required.append(result.get("lyrics_artifact_path"))
         if source_sha256 is not None and result.get("source_sha256") != source_sha256:
             return None
-        if result.get('pipeline_version') != 'roadmap1_v1':
+        if result.get('pipeline_version') != 'roadmap1_v2':
             return None
         return result if result.get("success") and all(p and os.path.isfile(p) for p in required) else None
     except (OSError, ValueError, TypeError):
@@ -231,7 +232,7 @@ def _load_page_checkpoint(path: str, require_lyrics: bool = False, source_sha256
 
 def _save_page_checkpoint(path: str, result: dict) -> None:
     checkpoint = {key: value for key, value in result.items() if key != "log"}
-    checkpoint['pipeline_version'] = 'roadmap1_v1'
+    checkpoint['pipeline_version'] = 'roadmap1_v2'
     temporary = path + ".tmp"
     with open(temporary, "w", encoding="utf-8") as checkpoint_file:
         json.dump(checkpoint, checkpoint_file, ensure_ascii=False, indent=2)
@@ -509,6 +510,8 @@ def process(
                 ],
                 "lyrics_separated": include_lyrics,
                 "lyrics_artifact_path": merged_lyrics_artifact,
+                # Document-level header comes from the opening page, not a later page's header.
+                "document_artifact_path": page_results[0].get('document_artifact_path'),
                 "chords_included": include_lyrics and include_chords,
                 "lyrics_confidence": round(mean(float(item.get("lyrics_confidence", 0.0)) for item in page_results), 6) if include_lyrics else 0.0,
                 "lyrics_confidence_note": "Model confidence only; not ground-truth accuracy.",
@@ -575,6 +578,17 @@ def process(
             result['note_anchors_path'] = anchor_path
         except Exception as anchor_error:
             print(f'[AudiverisRunner] Pixel anchors unavailable: {anchor_error}')
+    if result.get('success') and result.get('omr_paths'):
+        # Derived copy only: raw_xml_path stays byte-for-byte Audiveris output.
+        try:
+            from xml_tools.clef_check import correct_octave_clefs
+            checked_path = os.path.join(output_dir, 'clef_checked.musicxml')
+            interline = float((page_model or {}).get('interline') or 20.0)
+            result['clef_check'] = correct_octave_clefs(result['xml_path'], result['omr_paths'][0], final_png,
+                                                        checked_path, interline)
+            result['xml_path'] = checked_path
+        except Exception as clef_error:
+            print(f'[AudiverisRunner] Clef check notice: {clef_error}')
 
     # Dual-layer OMR: primary notes come from the notation-priority image;
     # directions and harmony may be recovered from the unmasked grayscale run.
@@ -677,6 +691,7 @@ def process(
                         "lyrics_alignment": alignment_summary,
                         "notation_separation": decomp_meta.get("notation_separation", {}),
                         "chord_alignment": chord_summary,
+                        "clef_check": result.get('clef_check'),
                         "section_count": len(structure['sections']),
                         "verse_count": structure['verse_count'],
                         "sections": [{key: section.get(key) for key in ('id', 'type', 'verse_count', 'measure_range',

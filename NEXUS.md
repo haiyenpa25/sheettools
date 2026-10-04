@@ -20,11 +20,14 @@
 - `xml_tools/chord_alignment.py`: grammar → kind/bass/degrees → pixel/onset → harmony offset; chỉ sửa dẫn xuất, không dùng harmony từ dual full-image.
 - `xml_tools/lyrics_aligner.py`: pixel DP v2 + slur extensions. Legacy v1 vẫn phục vụ artifact cũ; pipeline có anchor JSON không trộn pixel/tenths. Token geometry fallback và confidence thấp ở JSON review.
 - `xml_tools/lyric_structure.py::LyricStructureAnalyzer`: marker + row offsets + Viterbi hệ/measure, verse/chorus/coda/intro; `detect_poem_stanzas`, `project_stanzas`, `structure_tree` tạo lyrics v2. Chỉ stanza đủ khớp/confidence mới chèn, không ép số âm tiết lệch.
-- `audiveris_runner.py`: source → preprocess → shared page_model + OCR roles + layer masks → Audiveris RAW/.omr → note_anchors → metadata/chords/sections → notation.musicxml → accepted lyrics → score.musicxml. Checkpoint gắn `pipeline_version=roadmap1_v1`, không tái dùng kết quả thuật toán cũ.
+- `xml_tools/vi_syllable.py`: hợp nhất dấu từ OCR cả dòng/crop với mặt chữ detector; kiểm tra âm tiết hợp lệ, ghi bằng chứng và cờ review khi mâu thuẫn. OCR hợp âm đọc lại crop có lề/phóng lớn; neo lời dùng tâm hộp chữ.
+- `xml_tools/clef_check.py`: đối chiếu octave clef grade thấp với ảnh; chỉ sửa cao độ trên MusicXML dẫn xuất khi mọi octave clef đều không có bằng chứng số 8. RAW và `.omr` giữ nguyên.
+- Ghép PDF nhiều trang chuyển tiếp `document_artifact_path` trang đầu qua `AudiverisOmrEngine` → artifact canonical → API `/document-artifact`; `PageWorkerRetryTest` kiểm tra metadata không bị mất khi ghép.
+- `audiveris_runner.py`: source → preprocess → shared page_model + OCR roles + layer masks → Audiveris RAW/.omr → note_anchors + clef_check → metadata/chords/sections → notation.musicxml → accepted lyrics → score.musicxml. Checkpoint gắn `pipeline_version=roadmap1_v2`, vô hiệu checkpoint v1 để Retry chạy thuật toán mới.
 - `resources/js/Services/LyricStructureService.ts` + `Components/LyricSections.vue`: tải API lyrics artifact và xem section/verse/review trong Editor. Nút Vai trò chữ dùng ảnh overlay backend thật, không tạo vùng giả.
 - `ExportService::export(..., duplicateChorus)` và `MusicXmlEngine::getFullXml()`: mặc định ĐK 1 dòng, tuỳ chọn nhân bản vào mọi verse trên bản clone. `ExportModal.vue` cung cấp checkbox. Vue shim và tham chiếu method đã sửa để TypeScript strict check chạy được.
 - `evaluation/roadmap_benchmark.py`: manifest verified → metric theo commit + source hash; không có ground truth thì accuracy_available=false. Fixture `.omr` không phải ground truth. `tests/ground_truth` chỉ chứa template/hướng dẫn.
-- Regression runner hiện **43/43 suites**; fixtures Audiveris 5.11 dùng hai source PDF khác nhau. Test SATB/stanza/section giữa hệ hiện dùng ảnh/dữ liệu tổng hợp; còn cần mẫu thật. Chi tiết kết quả và giới hạn tại `ROADMAP1_IMPLEMENTATION.md`.
+- Regression runner hiện **44/44 suites**, gồm `DiacriticFusionTest` (11 trường hợp) và kiểm tra từ chối checkpoint v1; fixtures Audiveris 5.11 dùng hai source PDF khác nhau. Test SATB/stanza/section giữa hệ hiện dùng ảnh/dữ liệu tổng hợp; còn cần mẫu thật. Chi tiết kết quả và giới hạn tại `ROADMAP1_IMPLEMENTATION.md`.
 
 
 ## Current verification note (2026-09-24)

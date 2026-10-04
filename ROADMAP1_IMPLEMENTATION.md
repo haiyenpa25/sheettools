@@ -19,15 +19,20 @@
 
 ## Kết quả kiểm tra hiện tại
 
-- `php -d zend.assertions=1 tests/run_all.php` trong runtime Docker: **43/43 bộ test đạt**.
+- `php -d zend.assertions=1 tests/run_all.php` trong image Docker mới: **44/44 bộ test đạt**, gồm 11 trường hợp fusion dấu/kiểm tra octave clef. Checkpoint `roadmap1_v2` từ chối kết quả v1 khi Retry.
 - `npx tsc --noEmit` và `npm run build`: đạt. Vite vẫn cảnh báo bundle lớn hơn 500 kB.
 - Hai PDF khác nhau chạy Audiveris thật: mỗi export có 91 đầu nốt có cao độ được ánh xạ. Đây là số nốt trong export, không phải số nốt được nhận đúng.
 - Mẫu 003: suy luận verse 2 lời (ô nhịp 1–8), chorus 1 dòng (9–18); 29 harmony accepted, 95 âm tiết accepted, 37 review.
 - Mẫu 002: 28 harmony accepted, 60 âm tiết accepted, 27 review.
 - Validator mẫu 003: XML/cấu trúc/music21 đạt; còn cảnh báo ô nhịp thiếu phách 8/9/13/14. Không tự chèn nốt để che cảnh báo.
 - Source PDF hash không đổi. RAW và `.omr` lưu riêng; export/assembly chỉ làm việc trên dẫn xuất.
+- Retry bản 270 mới nhất hoàn thành 2/2 trang trên image mới; cả hai checkpoint v2, sửa 6/2 octave clef theo từng trang. SHA-256 của PDF nguồn, RAW và `source.omr` giữ nguyên. Trạng thái `NEEDS_REVIEW` còn giữ để soát lỗi nhận dạng.
+- Kết quả ghép PDF nhiều trang chuyển tiếp `document_artifact_path` của trang mở đầu để API cung cấp metadata đã nhận dạng; `PageWorkerRetryTest` kiểm tra luồng này.
 
 ## Giới hạn và việc cần dữ liệu thật
+
+- Báo cáo người dùng trên riêng `270.pdf`: lời đúng cả dấu trang 1 từ 57% lên 89% (187 âm tiết), trang 2 từ 87% lên 91%; cao độ và hợp âm trang 1 đã sửa. Đây là kết quả đối chiếu thủ công do người dùng cung cấp, chưa được tái đo bằng manifest ground truth trong repository.
+- Bài 270 còn thiếu khoảng 18 âm tiết trang 1 (chủ yếu thiếu nốt liên ba), câu mở điệp khúc cuối trang 1 còn bị xếp lời 2; trang 2 còn thiếu C và E♭m thành Em. Không dùng các số đo một bài để kết luận accuracy chung.
 
 - Chưa có bộ **30–50 bài ground truth được soát bởi người**. Không xác nhận bất kỳ mục tiêu accuracy nào trong Roadmap_1.
 - Mẫu thật hiện chỉ là 1 khuông/hệ. SATB, khối thơ lời 2–4, thiếu dòng, chuyển section giữa hệ được test tổng hợp; cần thêm mẫu thật để nghiệm thu các trường hợp này.
