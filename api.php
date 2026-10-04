@@ -476,7 +476,8 @@ if (preg_match('#^/api/conversions/([a-zA-Z0-9_\-]+)(/.*)?$#', $uri, $matches)) 
         $input = json_decode(file_get_contents('php://input'), true) ?: [];
         $format = $input['format'] ?? 'musicxml';
         $variant = $input['variant'] ?? 'full';
-        $exportPath = $exportService->export($uuid, $format, $variant);
+        $duplicateChorus = ($input['duplicate_chorus'] ?? false) === true;
+        $exportPath = $exportService->export($uuid, $format, $variant, $duplicateChorus);
 
         if (!$exportPath || !file_exists($exportPath)) {
             jsonResponse(['error' => 'EXPORT_FAILED', 'message' => 'Failed to export score file.'], 500);
@@ -486,7 +487,7 @@ if (preg_match('#^/api/conversions/([a-zA-Z0-9_\-]+)(/.*)?$#', $uri, $matches)) 
             'success' => true,
             'format' => $format,
             'variant' => $variant,
-            'download_url' => '/api/conversions/' . $uuid . '/download?format=' . $format . '&variant=' . $variant,
+            'download_url' => '/api/conversions/' . $uuid . '/download?format=' . $format . '&variant=' . $variant . ($duplicateChorus ? '&duplicate_chorus=1' : ''),
             'file_name' => basename($exportPath),
         ]);
     }
@@ -499,10 +500,12 @@ if (preg_match('#^/api/conversions/([a-zA-Z0-9_\-]+)(/.*)?$#', $uri, $matches)) 
             jsonResponse(['error' => 'INVALID_EXPORT_OPTIONS', 'message' => 'Unsupported export format or variant.'], 400);
         }
         $baseName = $variant === 'lyrics' ? 'lyrics_only' : ($variant === 'notation' ? 'score_notation_only' : 'score_full');
+        $duplicateChorus = ($_GET['duplicate_chorus'] ?? '') === '1';
+        if ($variant === 'full' && $duplicateChorus) $baseName = 'score_full_chorus_all_verses';
         $extension = $variant === 'lyrics' ? 'txt' : $format;
         $exportPath = $storageService->getProjectDir($uuid) . DIRECTORY_SEPARATOR . 'export' . DIRECTORY_SEPARATOR . $baseName . '.' . $extension;
         if (!file_exists($exportPath)) {
-            $exportPath = $exportService->export($uuid, $format, $variant);
+            $exportPath = $exportService->export($uuid, $format, $variant, $duplicateChorus);
         }
 
         if (!$exportPath || !file_exists($exportPath)) {

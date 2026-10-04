@@ -258,6 +258,12 @@
         <div class="h-9 bg-surface-container-low border-b border-border-subtle flex items-center px-3 justify-between shrink-0 gap-2 flex-wrap">
           <div class="flex items-center gap-2">
             <span class="font-label-sm text-xs text-on-surface font-bold uppercase tracking-wider">Bản gốc</span>
+            <button v-if="props.projectUuid && sourcePages.length"
+              @click="showRoleOverlay = !showRoleOverlay; roleOverlayUnavailable = false"
+              class="px-2 py-1 rounded-md text-xs font-medium text-primary bg-surface-container-high"
+              :aria-pressed="showRoleOverlay" title="Xem vai trò chữ và khuông do pipeline phân loại">
+              {{ showRoleOverlay ? 'Ẩn vai trò chữ' : 'Vai trò chữ' }}
+            </button>
             <!-- 3-Zone Inspector Toggle -->
             <button
               @click="show3ZoneOverlay = !show3ZoneOverlay"
@@ -428,6 +434,15 @@
                 :alt="`Trang nguồn ${activeSourcePageIndex + 1}`"
                 class="w-full h-auto object-contain rounded-xs shadow-sm border border-border-subtle"
               />
+              <img v-if="showRoleOverlay && !roleOverlayUnavailable"
+                :key="`${props.projectUuid}-${activeSourcePageIndex}`"
+                :src="`/api/conversions/${encodeURIComponent(props.projectUuid || '')}/pages/${activeSourcePageIndex}/regions-debug`"
+                alt="Phân loại: xanh lá — lời; xanh dương — hợp âm; cam — metadata; đỏ — cần soát"
+                class="absolute inset-0 w-full h-auto pointer-events-none"
+                @error="roleOverlayUnavailable = true" />
+              <span v-if="showRoleOverlay && roleOverlayUnavailable" class="text-xs text-secondary">
+                Trang này chưa có bản phân loại chữ. Chạy nhận dạng lại để tạo artifact.
+              </span>
               <div
                 class="absolute border-2 pointer-events-none rounded transition-all"
                 :class="hasIssue(activeMeasure) ? 'border-error bg-error/20' : 'border-primary bg-sync-active-highlight'"
@@ -766,6 +781,7 @@
 
           <!-- Lyrics Grid Content -->
           <div class="flex flex-col gap-3 overflow-y-auto pr-1">
+            <LyricSections :project-uuid="props.projectUuid" />
             <!-- Bulk Edit Overlay if toggled -->
             <div v-if="showBulkLyrics" class="bg-surface-container-low p-3 rounded border border-border-subtle space-y-2">
               <div class="flex justify-between items-center">
@@ -1201,6 +1217,7 @@ import { ref, computed, onMounted, onUnmounted, nextTick, reactive, watch } from
 import { OpenSheetMusicDisplay } from 'opensheetmusicdisplay';
 import { MusicXmlEngine, type ParsedLyric, type ParsedHarmony, type ParsedNoteDetail } from '../Services/MusicXmlEngine';
 import { AudioPlaybackEngine } from '../Services/AudioPlaybackEngine';
+import LyricSections from './LyricSections.vue';
 
 const props = defineProps<{
   projectTitle: string;
@@ -1238,10 +1255,15 @@ const audioPlayer = new AudioPlaybackEngine();
 const show3ZoneOverlay = ref(false);
 const sourcePages = ref<string[]>([]);
 const activeSourcePageIndex = ref(0);
+const showRoleOverlay = ref(false);
+const roleOverlayUnavailable = ref(false);
+watch(activeSourcePageIndex, () => { roleOverlayUnavailable.value = false; });
 
 async function loadSourcePages(): Promise<void> {
   sourcePages.value = [];
   activeSourcePageIndex.value = 0;
+  showRoleOverlay.value = false;
+  roleOverlayUnavailable.value = false;
   if (!props.projectUuid) return;
   try {
     const response = await fetch(`/api/conversions/${encodeURIComponent(props.projectUuid)}/pages`, { cache: 'no-store' });

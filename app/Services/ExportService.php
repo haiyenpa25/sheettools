@@ -66,7 +66,7 @@ class ExportService
     /**
      * Xuất tệp MusicXML theo định dạng yêu cầu (.xml, .musicxml, .mxl)
      */
-    public function export(string $uuid, string $format = 'musicxml', string $variant = 'full'): ?string
+    public function export(string $uuid, string $format = 'musicxml', string $variant = 'full', bool $duplicateChorus = false): ?string
     {
         $curPath = $this->storageService->getCurrentMusicXmlPath($uuid);
         if (!file_exists($curPath)) {
@@ -111,8 +111,12 @@ class ExportService
 
         $sourcePath = $curPath;
         $baseName = $variant === 'notation' ? 'score_notation_only' : 'score_full';
-        if ($variant === 'notation') {
-            $sourcePath = $exportDir . DIRECTORY_SEPARATOR . '_notation_source.musicxml';
+        if ($variant === 'full' && $duplicateChorus) {
+            $this->duplicateChorus($doc);
+            $baseName = 'score_full_chorus_all_verses';
+        }
+        if ($variant === 'notation' || ($variant === 'full' && $duplicateChorus)) {
+            $sourcePath = $exportDir . DIRECTORY_SEPARATOR . '_' . $baseName . '_source.musicxml';
             if ($doc->save($sourcePath) === false) {
                 return null;
             }
@@ -138,6 +142,30 @@ class ExportService
 
             default:
                 return null;
+        }
+    }
+
+    private function duplicateChorus(\DOMDocument $doc): void
+    {
+        $xpath = new \DOMXPath($doc);
+        $lyrics = $xpath->query('//*[local-name()="lyric"]');
+        $verseCount = 1;
+        foreach ($lyrics ?: [] as $lyric) {
+            if ($lyric instanceof \DOMElement && ctype_digit($lyric->getAttribute('number'))) {
+                $verseCount = max($verseCount, min(99, (int) $lyric->getAttribute('number')));
+            }
+        }
+        foreach (iterator_to_array($lyrics ?: []) as $lyric) {
+            if (!$lyric instanceof \DOMElement || $lyric->getAttribute('name') !== 'ĐK' || $lyric->getAttribute('number') !== '1') continue;
+            for ($number = 2; $number <= $verseCount; $number++) {
+                $existing = $xpath->query('./*[local-name()="lyric"][@number="' . $number . '"]', $lyric->parentNode);
+                if ($existing !== false && $existing->length > 0) continue;
+                $clone = $lyric->cloneNode(true);
+                if ($clone instanceof \DOMElement) {
+                    $clone->setAttribute('number', (string) $number);
+                    $lyric->parentNode?->appendChild($clone);
+                }
+            }
         }
     }
 

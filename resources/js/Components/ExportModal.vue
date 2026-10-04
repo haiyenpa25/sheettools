@@ -59,6 +59,10 @@
         <!-- TAB 1: FULL SCORE -->
         <!-- ═══════════════════════════════════════════════════════════ -->
         <div v-if="activeVersion === 'full'" class="space-y-3">
+          <label class="flex items-center gap-2 text-xs text-on-surface">
+            <input v-model="duplicateChorus" type="checkbox" class="accent-primary" />
+            Nhân bản điệp khúc vào mọi lời (mặc định xuất một dòng)
+          </label>
           <div class="bg-success/5 border border-success/20 rounded-lg p-3 flex items-center gap-2.5 text-xs text-on-surface">
             <span class="material-symbols-outlined text-success text-sm">check_circle</span>
             <span>Bản nhạc toàn diện chuẩn MusicXML 4.0 • Tương thích SheetApp, OSMD, MuseScore 4 & Sibelius</span>
@@ -228,6 +232,7 @@ const emit = defineEmits<{
 
 const activeVersion = ref<'full' | 'instrumental' | 'lyrics'>('full');
 const copiedToast = ref<boolean>(false);
+const duplicateChorus = ref(false);
 
 const engine = computed(() => new MusicXmlEngine(props.xmlContent));
 
@@ -258,7 +263,7 @@ function getCleanName(suffix: string = ''): string {
 }
 
 function downloadFull(format: string) {
-  triggerDownload(props.xmlContent, `${getCleanName()}.${format}`, 'application/vnd.recordare.musicxml+xml;charset=utf-8');
+  triggerDownload(engine.value.getFullXml(duplicateChorus.value), `${getCleanName()}.${format}`, 'application/vnd.recordare.musicxml+xml;charset=utf-8');
   emit('close');
 }
 

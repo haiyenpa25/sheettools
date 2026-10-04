@@ -2,16 +2,16 @@
 """
 workers/xml_tools/vietnamese_universal_ocr.py
 ═══════════════════════════════════════════════════════════════════════════════
-DEEP SPATIAL VIETNAMESE OMR & MUSICXML TEXT EXTRACTION (SOTA)
+SPATIAL VIETNAMESE OCR & MUSICXML TEXT LAYERS
 ═══════════════════════════════════════════════════════════════════════════════
 Quy trình trích xuất văn bản sâu:
-1. Xóa các đường kẻ khuông (Staff lines) và đuôi nốt (Stems) để tách lớp văn bản sạch 100%.
+1. Dò bố cục và giữ hành lang khuông/nốt khi tạo các lớp chữ dẫn xuất.
 2. Phân tầng không gian theo từng khuông nhạc:
    - Header Band (y < Staff₀): Tiêu đề, Tác giả, Nhạc sĩ, Điệu nhạc.
    - Chords Band (Trên khuông): Hợp âm (Em, G/B, F#m7, B7...).
    - Lyric Band (Dưới khuông): Lời hát tiếng Việt chuẩn thanh điệu.
 3. Chạy VietOCR VGG-Transformer + RapidOCR trên lớp chữ đã làm sạch.
-4. Tự động gắn chính xác lời và hợp âm vào từng nốt nhạc trong MusicXML.
+4. Căn lời/hợp âm theo hình học, giữ các kết quả không chắc chắn để soát.
 """
 
 import os
@@ -23,6 +23,7 @@ import numpy as np
 import xml.etree.ElementTree as ET
 from PIL import Image
 from pathlib import Path
+from .text_roles import is_chord, classify_text_line, cluster_text_rows
 
 # Bảng dịch ngược các mã Ligature / Latinh méo dạng do OMR
 LIGATURE_MAP = {
@@ -373,11 +374,11 @@ class VietnameseUniversalOcrEngine:
 
         return results
 
-    def decompose_sheet_3zones(self, img_input) -> dict:
+    def decompose_sheet_3zones(self, img_input, page_model: dict | None = None) -> dict:
         """
-        Phân tích tách trang sheet nhạc làm 3 VÙNG SPATIAL ĐỘC LẬP CHUẨN XÁC CAO (v2.0):
+        Phân tích trang theo page model dùng chung và các vai trò chữ:
         - ZONE 1: Header Zone (Ghép tiêu đề nhiều dòng, tác giả lệch phải, lời dịch lệch trái, số bài)
-        - ZONE 2: Pure Notation Sheet (Xóa chữ + Tái tạo dòng kẻ khuông bị đứt bằng Inpainting cho OMR nốt sạch 100%)
+        - ZONE 2: Notation Sheet (white-fill mask chữ ngoài hành lang bảo vệ)
         - ZONE 3: Lyrics & Verses Zone (Tách lời theo từng Khuông nhạc, phân dòng Verse 1..N, tách riêng Hợp âm)
         """
         if isinstance(img_input, str):
@@ -392,17 +393,14 @@ class VietnameseUniversalOcrEngine:
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
         # 1. Phát hiện vị trí các khuông nhạc (Staff Lines)
-        staves = []
-        try:
-            from cv_omr_engine import ComputerVisionOmrEngine
-            cv_engine = ComputerVisionOmrEngine()
-            staves = cv_engine.detect_staves(gray)
-        except Exception:
-            pass
+        from preprocessing.page_layout import PageLayoutAnalyzer
+        if page_model is None:
+            page_model = PageLayoutAnalyzer().analyze_image(gray)
+        staves = [staff['lines_y'] for staff in page_model['staff_candidates']]
 
         if staves:
             first_staff_top = staves[0][0]
-            interline = (staves[0][-1] - staves[0][0]) / 4.0
+            interline = page_model['interline']
         else:
             first_staff_top = int(h * 0.18)
             interline = h * 0.02
@@ -417,18 +415,6 @@ class VietnameseUniversalOcrEngine:
         harmony_boxes = []
         lyric_boxes_by_staff = {i: [] for i in range(len(staves))} if staves else {0: []}
         other_boxes = []
-
-        chord_regex = re.compile(r'^[A-Ga-g][#b4♭♯]?(m|min|maj|dim|aug|sus|7|9|add|M)?([0-9\?\/]*[A-Ga-g]?[#b♭♯]?)?$')
-
-        def is_probable_chord(token: str) -> bool:
-            tk = token.strip()
-            if not tk or len(tk) > 7:
-                return False
-            if chord_regex.match(tk):
-                return True
-            if any(k in tk.lower() for k in ['sus', 'dim', 'maj', 'm7', 'f4m', 'f47', 'ff7', 'făm', 'făm7', 'bsus', 'f#m', 'c#m', 'd#m', 'g#m', 'bb', 'eb', 'ab']):
-                return True
-            return False
 
         for item in ocr_results or []:
             box, raw_text, score = item
@@ -453,7 +439,7 @@ class VietnameseUniversalOcrEngine:
             selected_text, context_changes = restore_liturgical_diacritics(selected_text)
             if context_changes:
                 selected_engine += '+context'
-            text = self.clean_syllable(selected_text)
+            text = unicodedata.normalize('NFC', selected_text).strip()
 
             if not text:
                 continue
@@ -474,31 +460,43 @@ class VietnameseUniversalOcrEngine:
 
             # ZONE 1: HEADER (Phía trên khuông nhạc đầu tiên). Header giữ nguyên
             # cả dòng; dòng lời phải tách thành từng âm tiết trước khi căn nốt.
+            band_name, system_id, staff_index = 'unknown', None, None
+            for system in page_model['systems']:
+                band_candidates = [('above', system['bands']['above'])] + [('between', band) for band in system['bands']['between']] + [('below', system['bands']['below'])]
+                for name, band in band_candidates:
+                    if band['box'][1] <= cy < band['box'][3]:
+                        band_name, system_id = name, system['id']
+                        staff_id = band.get('staff_id', system['staff_ids'][0])
+                        staff_index = next(i for i, staff in enumerate(page_model['staff_candidates']) if staff['id'] == staff_id)
+                        break
+                if system_id:
+                    break
+            line_role = classify_text_line(text, band_name)
+            if cy > h*.9 and re.fullmatch(r'\d{1,4}', text):
+                line_role['role'] = 'footer'
+            tokens = split_ocr_line_item(data_item, img)
+            page_model['text_lines'].append({'id': f"text_{len(page_model['text_lines'])+1:03d}",
+                **data_item, **line_role, 'system_id': system_id, 'band': band_name,
+                'line_index': None, 'tokens': tokens})
+            if line_role['role'] == 'chord':
+                for token_item in tokens:
+                    if is_chord(token_item['text']):
+                        token_item['staff_index'] = staff_index
+                        token_item['system_id'] = system_id
+                        harmony_boxes.append(token_item)
+                continue
             if cy < first_staff_top - interline * 0.8:
                 header_boxes.append(data_item)
                 continue
 
-            for token_item in split_ocr_line_item(data_item):
+            for token_item in tokens:
                 token_text = token_item['text']
                 # ZONE 3: HỢP ÂM HAY LỜI BÀI HÁT
-                if is_probable_chord(token_text):
-                    token_item['text'] = token_text.replace('4', '#').replace('?', '').strip()
-                    harmony_boxes.append(token_item)
-                    continue
                 assigned = False
-                if staves:
-                    for s_idx, s in enumerate(staves):
-                        lyric_top = s[-1] + interline * 0.20
-                        # Chữ gần khuông kế tiếp là hợp âm/direction của khuông đó,
-                        # không phải verse phụ của khuông trước.
-                        lyric_bottom = (
-                            (s[-1] + staves[s_idx + 1][0]) / 2.0
-                            if s_idx + 1 < len(staves) else h
-                        )
-                        if lyric_top <= token_item['cy'] < lyric_bottom:
-                            lyric_boxes_by_staff[s_idx].append(token_item)
-                            assigned = True
-                            break
+                if band_name in ('below', 'between') and line_role['role'] == 'lyric' and staff_index is not None:
+                    token_item['system_id'] = system_id
+                    lyric_boxes_by_staff[staff_index].append(token_item)
+                    assigned = True
                 if not assigned:
                     other_boxes.append(token_item)
 
@@ -509,7 +507,7 @@ class VietnameseUniversalOcrEngine:
         hymn_number = ""
         category = ""
 
-        valid_header_boxes = [b for b in header_boxes if not (chord_regex.match(b['text']) and len(b['text']) <= 6)]
+        valid_header_boxes = header_boxes
         non_category_boxes = []
         for b in valid_header_boxes:
             txt = b['text']
@@ -545,13 +543,29 @@ class VietnameseUniversalOcrEngine:
         document_model = analyze_header_semantics(header_boxes, w, first_staff_top)
         title = document_model['title']['text'] or title
         composer = document_model['composer']['text'] or composer
+        lyricist = document_model['lyricist']['text'] or lyricist
         hymn_number = document_model['hymn_number']['text'] or hymn_number
         category = document_model['collection']['text'] or category
+        for line in page_model['text_lines']:
+            semantic = next((region for region in document_model['semantic_regions'] if region.get('box') == line['box']), None)
+            if semantic:
+                line['role'] = semantic['role']
+                line['needs_review'] = False
+        for system in page_model['systems']:
+            for band_name in ('above', 'between', 'below'):
+                lines = [line for line in page_model['text_lines'] if line['system_id'] == system['id'] and line['band'] == band_name]
+                for index, row in enumerate(cluster_text_rows(lines)):
+                    for line in row:
+                        line['line_index'] = index
 
         # ─── TẠO ZONE 2: NOTATION-FIRST, KHÔNG ĐƯỢC XÓA KÝ HIỆU TRONG KHUÔNG ───
         all_text_boxes = header_boxes + harmony_boxes + [it for s_list in lyric_boxes_by_staff.values() for it in s_list] + other_boxes
-        from preprocessing.notation_layers import build_notation_layer
-        layer_result = build_notation_layer(img, all_text_boxes, staves)
+        from preprocessing.notation_layers import build_notation_layers
+        layer_result = build_notation_layers(img, {
+            'metadata': header_boxes,
+            'lyrics': [it for s_list in lyric_boxes_by_staff.values() for it in s_list],
+            'chords': harmony_boxes,
+        }, staves, padding=max(1, int(round(.15*interline))))
         pure_notation_img = layer_result['notation_image']
 
         # ─── BÓC TÁCH ZONE 3: LỜI ĐƯỢC PHÂN TÁCH ĐA VERSE (VERSE 1 & VERSE 2) THEO DÒNG Y ───
@@ -560,26 +574,14 @@ class VietnameseUniversalOcrEngine:
             # Lọc bỏ ký hiệu hợp âm nếu còn sót
             valid_lyric_items = [
                 it for it in items
-                if not is_probable_chord(it['text'])
-                and not re.fullmatch(r'[#\d.,:;]+', it['text'])
+                if not re.fullmatch(r'[#\d,:;]+', it['text'])
                 and not re.fullmatch(r'[A-Za-z]', it['text'])
             ]
             if not valid_lyric_items:
                 continue
 
             # Phân tách các dòng Verse khác nhau dưới cùng 1 khuông theo tọa độ Y
-            items_by_y = sorted(valid_lyric_items, key=lambda x: x['cy'])
-            verse_lines = []
-            for it in items_by_y:
-                added = False
-                for v_line in verse_lines:
-                    avg_y = sum(x['cy'] for x in v_line) / len(v_line)
-                    if abs(it['cy'] - avg_y) < 28:  # Cùng 1 dòng chữ
-                        v_line.append(it)
-                        added = True
-                        break
-                if not added:
-                    verse_lines.append([it])
+            verse_lines = cluster_text_rows(valid_lyric_items)
 
             # Sắp xếp các dòng verse từ trên xuống dưới (Dòng trên = Verse 1, Dòng dưới = Verse 2)
             verse_lines = sorted(verse_lines, key=lambda vl: sum(x['cy'] for x in vl) / len(vl))
@@ -589,6 +591,11 @@ class VietnameseUniversalOcrEngine:
                 for it in vl_sorted:
                     all_lyrics_flat.append({
                         'staff_index': s_idx,
+                        'system_id': it.get('system_id'),
+                        'interline': interline,
+                        'row_offset': (it['cy']-staves[s_idx][-1])/interline if staves else 0,
+                        'box_source': it.get('box_source', 'ocr_detector'),
+                        'geometry_needs_review': it.get('geometry_needs_review', False),
                         'verse_number': v_idx + 1,
                         'text': it['text'],
                         'x': it['cx'],
@@ -605,8 +612,14 @@ class VietnameseUniversalOcrEngine:
         # complete spatially ordered lyric stream, preserving every word box.
         from xml_tools.vietnamese_context import restore_liturgical_items
         all_lyrics_flat = restore_liturgical_items(all_lyrics_flat)
+        from xml_tools.lyric_structure import detect_poem_stanzas
+        stanzas = detect_poem_stanzas(all_lyrics_flat, staves[-1][-1], interline) if staves else []
+        all_lyrics_flat = [word for word in all_lyrics_flat if not re.fullmatch(r'\d+[.)]', word['text'])]
 
         return {
+            'page_model': page_model,
+            'text_masks': layer_result['masks'],
+            'stanzas': stanzas,
             'header': {
                 'title': title,
                 'composer': composer,
@@ -620,7 +633,8 @@ class VietnameseUniversalOcrEngine:
             },
             'pure_notation_img': pure_notation_img,
             'lyrics': all_lyrics_flat,
-            'harmonies': [{'chord': h['text'], 'x': h['cx'], 'y': h['cy']} for h in harmony_boxes],
+            'harmonies': [{'chord': h['text'], 'x': h['cx'], 'y': h['cy'], 'box': h['box'],
+                           'confidence': h['score'], 'staff_index': h['staff_index'], 'system_id': h['system_id']} for h in harmony_boxes],
             'first_staff_y': int(first_staff_top),
             'staves_count': len(staves),
             'notation_separation': {
@@ -675,14 +689,31 @@ class VietnameseUniversalOcrEngine:
                     comp_elem = ET.SubElement(ident, 'creator', {'type': 'composer'})
                 comp_elem.text = composer
 
+            lyricist = header.get('lyricist')
+            if lyricist:
+                ident = root.find('identification')
+                if ident is None:
+                    ident = ET.SubElement(root, 'identification')
+                creator = next((item for item in ident.findall('creator') if item.get('type') == 'lyricist'), None)
+                if creator is None:
+                    creator = ET.SubElement(ident, 'creator', {'type': 'lyricist'})
+                creator.text = lyricist
+
             # 2b. Preserve semantic page text as MusicXML credits. The complete
             # geometry and raw OCR remain authoritative in document.json.
             document_model = header.get('document_model', {})
             credit_roles = [
+                ('title', 'title'),
+                ('composer', 'composer'),
+                ('lyricist', 'lyricist'),
                 ('collection', 'subtitle'),
                 ('hymn_number', 'title-number'),
                 ('description', 'subtitle'),
                 ('scripture_reference', 'subtitle'),
+                ('translator', 'lyricist'),
+                ('tempo', 'subtitle'),
+                ('key_info', 'subtitle'),
+                ('note', 'subtitle'),
             ]
             for role, credit_type in credit_roles:
                 field = document_model.get(role, {})
@@ -694,11 +725,16 @@ class VietnameseUniversalOcrEngine:
                 attributes = {'justify': 'left' if role in ('collection', 'hymn_number') else 'center'}
                 box = field.get('box', [])
                 if len(box) == 4:
-                    attributes['default-x'] = str(round((float(box[0]) + float(box[2])) / 2.0, 2))
-                    attributes['default-y'] = str(round((float(box[1]) + float(box[3])) / 2.0, 2))
+                    model = decomp_meta.get('page_model', {})
+                    scale = 10/max(float(model.get('interline', 10)), 1)
+                    attributes['default-x'] = str(round((float(box[0]) + float(box[2])) / 2.0*scale, 2))
+                    attributes['default-y'] = str(round((float(model.get('height', 0))-(float(box[1]) + float(box[3])) / 2.0)*scale, 2))
                 ET.SubElement(credit, 'credit-words', attributes).text = value
 
             if not inject_lyrics:
+                order = {'work': 0, 'movement-number': 1, 'movement-title': 2, 'identification': 3,
+                         'defaults': 4, 'credit': 5, 'part-list': 6, 'part': 7}
+                root[:] = sorted(list(root), key=lambda element: order.get(element.tag, 8))
                 tree.write(xml_path, encoding='utf-8', xml_declaration=True)
                 return True
 
@@ -789,9 +825,9 @@ def heal_vietnamese_universal(xml_path: str, source_img_path: str = None) -> boo
 def inject_3zone_metadata_and_lyrics(xml_path: str, decomp_meta: dict, inject_lyrics: bool = True) -> bool:
     return _engine.inject_3zone_metadata_and_lyrics(xml_path, decomp_meta, inject_lyrics)
 
-def decompose_sheet_3zones(img_input) -> dict:
-    return _engine.decompose_sheet_3zones(img_input)
-def split_ocr_line_item(item: dict) -> list[dict]:
+def decompose_sheet_3zones(img_input, page_model: dict | None = None) -> dict:
+    return _engine.decompose_sheet_3zones(img_input, page_model)
+def split_ocr_line_item(item: dict, image: np.ndarray | None = None) -> list[dict]:
     """Split a line-level OCR box into Vietnamese syllable boxes by character width."""
     tokens = [token for token in re.split(r'\s+', str(item.get('text', '')).strip()) if token]
     if len(tokens) <= 1:
@@ -801,6 +837,8 @@ def split_ocr_line_item(item: dict) -> list[dict]:
     cursor = float(x1)
     available = float(x2 - x1)
     result = []
+    from xml_tools.syllable_geometry import ink_word_boxes
+    ink_boxes = ink_word_boxes(image, item['box'], len(tokens)) if image is not None else None
     for index, token in enumerate(tokens):
         token_width = available * max(len(token), 1) / total_units
         token_x1 = cursor
@@ -812,6 +850,12 @@ def split_ocr_line_item(item: dict) -> list[dict]:
             'cx': (token_x1 + token_x2) / 2.0,
             'w': max(1, int(round(token_x2 - token_x1))),
         })
+        if ink_boxes:
+            child['box'] = ink_boxes[index]
+            child['cx'] = (child['box'][0]+child['box'][2])/2
+            child['w'] = child['box'][2]-child['box'][0]
+        child['box_source'] = 'ink_projection' if ink_boxes else 'character_fallback'
+        child['geometry_needs_review'] = ink_boxes is None
         child_candidates = []
         for candidate in item.get('ocr_candidates', []):
             candidate_tokens = [value for value in re.split(r'\s+', str(candidate.get('text', '')).strip()) if value]

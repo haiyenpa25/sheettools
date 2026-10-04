@@ -80,11 +80,12 @@ def write_without_chords(source_path: str, destination_path: str) -> str:
     return destination_path
 
 
-def merge_semantic_elements(primary_path: str, auxiliary_path: str, destination_path: str) -> str:
+def merge_semantic_elements(primary_path: str, auxiliary_path: str, destination_path: str, include_harmony: bool = True) -> str:
     """Copy directions/harmonies from full grayscale OMR without touching primary notes."""
     primary_tree = ET.parse(primary_path)
     auxiliary_tree = ET.parse(auxiliary_path)
     primary_root, auxiliary_root = primary_tree.getroot(), auxiliary_tree.getroot()
+    allowed = {'direction', 'harmony'} if include_harmony else {'direction'}
     primary_parts = [node for node in primary_root if node.tag.rsplit('}', 1)[-1] == 'part']
     auxiliary_parts = {node.get('id'): node for node in auxiliary_root if node.tag.rsplit('}', 1)[-1] == 'part'}
     for primary_part in primary_parts:
@@ -99,7 +100,7 @@ def merge_semantic_elements(primary_path: str, auxiliary_path: str, destination_
             first_note_index = next((index for index, node in enumerate(primary_measure)
                                      if node.tag.rsplit('}', 1)[-1] == 'note'), len(primary_measure))
             for node in auxiliary_measure:
-                if node.tag.rsplit('}', 1)[-1] not in {'direction', 'harmony'}:
+                if node.tag.rsplit('}', 1)[-1] not in allowed:
                     continue
                 serialized = ET.tostring(node, encoding='unicode')
                 if serialized not in existing:
@@ -132,19 +133,24 @@ def write_lyrics_artifact(decomp_meta: dict, destination_path: str, page_number:
             "raw_ocr": item.get("raw_ocr"),
             "ocr_candidates": item.get("ocr_candidates", []),
             "context_changes": item.get("context_changes", []),
+            **{key: item[key] for key in ('system_id', 'section_id', 'section_type', 'lyric_name', 'row_offset',
+                                         'box_source', 'geometry_needs_review', 'poem_stanza') if key in item},
             "alignment": None,
         })
     verses: dict[str, list[dict]] = {}
     for word in words:
         verses.setdefault(str(word["verse_number"]), []).append(word)
     artifact = {
-        "schema_version": 1,
+        "schema_version": 2 if decomp_meta.get('sections') else 1,
         "artifact_type": "lyrics_ocr",
         "alignment_status": "unreviewed",
         "page_count": 1,
         "word_count": len(words),
         "words": words,
         "verses": verses,
+        "sections": decomp_meta.get('sections', []),
+        "stanzas": [{**stanza, 'words': [word for word in words if word.get('poem_stanza') == stanza['id']]}
+                    for stanza in decomp_meta.get('stanzas', [])],
     }
     temporary = destination_path + ".tmp"
     with open(temporary, "w", encoding="utf-8") as output:
@@ -155,10 +161,24 @@ def write_lyrics_artifact(decomp_meta: dict, destination_path: str, page_number:
 
 def merge_lyrics_artifacts(source_paths: list[str], destination_path: str) -> str:
     """Merge page-level lyric artifacts without losing page/staff/verse coordinates."""
-    words = []
-    for source_path in source_paths:
+    words, sections, stanzas = [], [], []
+    for page_index, source_path in enumerate(source_paths, 1):
         with open(source_path, "r", encoding="utf-8") as source:
-            words.extend(json.load(source).get("words", []))
+            page_artifact = json.load(source)
+        page_words = page_artifact.get('words', [])
+        for section in page_artifact.get('sections', []):
+            old_id = section['id']
+            section['id'] = f'p{page_index}-{old_id}'
+            section['page'] = page_index
+            section['measure_scope'] = 'page_original'
+            for word in page_words:
+                if word.get('section_id') == old_id:
+                    word['section_id'] = section['id']
+            sections.append(section)
+        for stanza in page_artifact.get('stanzas', []):
+            stanza['page'] = page_index
+            stanzas.append(stanza)
+        words.extend(page_words)
     words.sort(key=lambda item: (
         int(item.get("page", 1)), int(item.get("staff_index", 0)),
         int(item.get("verse_number", 1)), float(item.get("y", 0)), float(item.get("x", 0)),
@@ -168,19 +188,24 @@ def merge_lyrics_artifacts(source_paths: list[str], destination_path: str) -> st
         verses.setdefault(str(word.get("verse_number", 1)), []).append(word)
     review_count = sum(1 for word in words if (word.get("alignment") or {}).get("status") != "accepted")
     artifact = {
-        "schema_version": 1,
+        "schema_version": 2 if sections else 1,
         "artifact_type": "lyrics_ocr",
         "alignment_status": "aligned" if words and review_count == 0 else "needs_review",
         "page_count": len(source_paths),
         "word_count": len(words),
         "words": words,
         "verses": verses,
+        "sections": sections,
+        "stanzas": stanzas,
         "alignment_summary": {
             "accepted": len(words) - review_count,
             "review": review_count,
             "algorithm": "monotonic_spatial_dp_v1",
         },
     }
+    if sections:
+        from xml_tools.lyric_structure import structure_tree
+        artifact['sections'] = structure_tree(words, sections)
     temporary = destination_path + ".tmp"
     with open(temporary, "w", encoding="utf-8") as output:
         json.dump(artifact, output, ensure_ascii=False, indent=2)
@@ -197,6 +222,8 @@ def _load_page_checkpoint(path: str, require_lyrics: bool = False, source_sha256
             required.append(result.get("lyrics_artifact_path"))
         if source_sha256 is not None and result.get("source_sha256") != source_sha256:
             return None
+        if result.get('pipeline_version') != 'roadmap1_v1':
+            return None
         return result if result.get("success") and all(p and os.path.isfile(p) for p in required) else None
     except (OSError, ValueError, TypeError):
         return None
@@ -204,6 +231,7 @@ def _load_page_checkpoint(path: str, require_lyrics: bool = False, source_sha256
 
 def _save_page_checkpoint(path: str, result: dict) -> None:
     checkpoint = {key: value for key, value in result.items() if key != "log"}
+    checkpoint['pipeline_version'] = 'roadmap1_v1'
     temporary = path + ".tmp"
     with open(temporary, "w", encoding="utf-8") as checkpoint_file:
         json.dump(checkpoint, checkpoint_file, ensure_ascii=False, indent=2)
@@ -497,10 +525,13 @@ def process(
     preprocessed_png = os.path.join(output_dir, "preprocessed.png")
     final_png = preprocess_image(source_png, preprocessed_png)
 
+    page_model = None
+    layout_base = os.path.join(output_dir, f"page_{source_page_number:03d}_regions")
     try:
         from preprocessing.page_layout import PageLayoutAnalyzer
         layout_base = os.path.join(output_dir, f"page_{source_page_number:03d}_regions")
-        PageLayoutAnalyzer().analyze(final_png, layout_base + ".json", layout_base + "_debug.png")
+        page_model = PageLayoutAnalyzer().analyze(final_png, layout_base + ".json", layout_base + "_debug.png")
+        page_model['page'] = source_page_number
     except Exception as layout_error:
         print(f"[AudiverisRunner] Page layout notice: {layout_error}")
 
@@ -509,7 +540,18 @@ def process(
     full_content_png = final_png
     try:
         from xml_tools.vietnamese_universal_ocr import decompose_sheet_3zones
-        decomp = decompose_sheet_3zones(final_png)
+        decomp = decompose_sheet_3zones(final_png, page_model=page_model)
+        import cv2
+        model = decomp.get('page_model')
+        if model is not None:
+            for name, mask in decomp.get('text_masks', {}).items():
+                mask_path = os.path.join(output_dir, f"mask_{name}.png")
+                if not cv2.imwrite(mask_path, mask):
+                    raise RuntimeError(f"Cannot write text mask: {mask_path}")
+                model['masks'][name] = os.path.basename(mask_path)
+            model_path = os.path.join(output_dir, 'page_model.json')
+            PageLayoutAnalyzer.save(model, cv2.imread(full_content_png), model_path, layout_base + '_debug.png')
+            PageLayoutAnalyzer.save(model, cv2.imread(full_content_png), layout_base + '.json', layout_base + '_debug.png')
         if decomp.get("pure_notation_img") is not None:
             import cv2
             pure_png = os.path.join(output_dir, "pure_notation.png")
@@ -523,6 +565,16 @@ def process(
     # Bước 3: Chạy Audiveris OMR trên bản nhạc đã làm sạch + music21 Auto-Healer
     omr_out_dir = os.path.join(output_dir, "omr_out")
     result = run_audiveris(final_png, omr_out_dir, audiveris_cli)
+    if result.get('success') and result.get('omr_paths'):
+        try:
+            from xml_tools.omr_anchors import OmrAnchorReader
+            anchor_model = OmrAnchorReader().read(result['omr_paths'][0], result['raw_xml_path'], page_model)
+            anchor_path = os.path.join(output_dir, 'note_anchors.json')
+            with open(anchor_path, 'w', encoding='utf-8') as target:
+                json.dump(anchor_model, target, ensure_ascii=False, indent=2)
+            result['note_anchors_path'] = anchor_path
+        except Exception as anchor_error:
+            print(f'[AudiverisRunner] Pixel anchors unavailable: {anchor_error}')
 
     # Dual-layer OMR: primary notes come from the notation-priority image;
     # directions and harmony may be recovered from the unmasked grayscale run.
@@ -532,7 +584,7 @@ def process(
         auxiliary = run_audiveris(full_content_png, os.path.join(output_dir, "omr_full_content"), audiveris_cli)
         if auxiliary.get("success") and auxiliary.get("xml_path"):
             semantic_path = os.path.join(output_dir, "notation_with_semantics.musicxml")
-            merge_semantic_elements(result["xml_path"], auxiliary["xml_path"], semantic_path)
+            merge_semantic_elements(result["xml_path"], auxiliary["xml_path"], semantic_path, include_harmony=False)
             result["xml_path"] = semantic_path
             result["dual_layer_omr"] = True
         else:
@@ -567,6 +619,11 @@ def process(
         try:
             from xml_tools.vietnamese_universal_ocr import inject_3zone_metadata_and_lyrics
             from xml_tools.lyrics_aligner import align_lyrics_artifact
+            from xml_tools.lyric_structure import LyricStructureAnalyzer
+            structure = LyricStructureAnalyzer().analyze(decomp_meta.get('lyrics', []),
+                decomp_meta.get('page_model', {}).get('text_lines', []),
+                anchor_model.get('anchors', []) if result.get('note_anchors_path') else [])
+            decomp_meta['sections'] = structure['sections']
             enriched_path = os.path.join(output_dir, "notation_with_lyrics.musicxml")
             result["lyrics_artifact_path"] = write_lyrics_artifact(
                 decomp_meta, os.path.join(output_dir, "lyrics.json"), source_page_number
@@ -580,21 +637,38 @@ def process(
                 result["document_artifact_path"] = document_path
             shutil.copy2(result["xml_path"], enriched_path)
             if inject_3zone_metadata_and_lyrics(enriched_path, decomp_meta, inject_lyrics=False):
+                from xml_tools.chord_alignment import inject_chords
+                chord_summary = inject_chords(enriched_path, decomp_meta.get('harmonies', []) if include_chords else [],
+                                              anchor_model.get('anchors', []) if result.get('note_anchors_path') else [])
+                result['chord_alignment'] = chord_summary
+                notation_path = os.path.join(output_dir, 'notation.musicxml')
+                notation_tree = ET.parse(enriched_path)
+                for parent in notation_tree.getroot().iter():
+                    for child in list(parent):
+                        if child.tag.rsplit('}', 1)[-1] == 'lyric':
+                            parent.remove(child)
+                notation_tree.write(notation_path, encoding='utf-8', xml_declaration=True)
                 alignment_summary = align_lyrics_artifact(
                     enriched_path,
                     result["lyrics_artifact_path"],
                     enriched_path,
                     result["lyrics_artifact_path"],
                     acceptance_threshold=float(os.getenv('LYRIC_ALIGNMENT_THRESHOLD', '0.55')),
+                    note_anchors_path=result.get('note_anchors_path'),
                 )
                 lyric_stats = confidence_summary(decomp_meta.get("lyrics", []))
                 result["xml_path"] = enriched_path
+                score_path = os.path.join(output_dir, 'score.musicxml')
+                shutil.copy2(enriched_path, score_path)
+                result['xml_path'] = score_path
                 result["lyrics_separated"] = True
                 result["lyrics_alignment"] = alignment_summary
                 result["lyrics_confidence"] = lyric_stats["mean"]
                 result["lyrics_confidence_stats"] = lyric_stats
                 result["lyrics_confidence_note"] = "Model confidence only; not ground-truth accuracy."
                 report_path = os.path.join(output_dir, "recognition_report.json")
+                with open(result['lyrics_artifact_path'], encoding='utf-8') as artifact_file:
+                    aligned_sections = json.load(artifact_file).get('sections', [])
                 with open(report_path, "w", encoding="utf-8") as report_file:
                     json.dump({
                         "ground_truth_used": False,
@@ -602,6 +676,11 @@ def process(
                         "lyrics": lyric_stats,
                         "lyrics_alignment": alignment_summary,
                         "notation_separation": decomp_meta.get("notation_separation", {}),
+                        "chord_alignment": chord_summary,
+                        "section_count": len(structure['sections']),
+                        "verse_count": structure['verse_count'],
+                        "sections": [{key: section.get(key) for key in ('id', 'type', 'verse_count', 'measure_range',
+                                     'systems', 'needs_review', 'alignment_summary')} for section in aligned_sections],
                         "message": "Provide verified reference MusicXML to calculate note accuracy and lyric CER/WER.",
                     }, report_file, ensure_ascii=False, indent=2)
                 result["recognition_report_path"] = report_path

@@ -734,13 +734,9 @@ export class MusicXmlEngine {
           if (sylIdx >= syllables.length) return;
 
           const currentSyl = syllables[sylIdx];
-          let lyricElem: Element | null = null;
-
-          note.querySelectorAll('lyric').forEach(l => {
-            if (parseInt(l.getAttribute('number') || '1', 10) === verseNumber) {
-              lyricElem = l;
-            }
-          });
+          let lyricElem = Array.from(note.querySelectorAll('lyric')).find(
+            lyric => parseInt(lyric.getAttribute('number') || '1', 10) === verseNumber
+          ) || null;
 
           if (!lyricElem) {
             lyricElem = this.doc.createElement('lyric');
@@ -782,6 +778,23 @@ export class MusicXmlEngine {
     return new XMLSerializer().serializeToString(cloneDoc);
   }
 
+  public getFullXml(duplicateChorus = false): string {
+    const cloneDoc = this.doc.cloneNode(true) as XMLDocument;
+    if (duplicateChorus) {
+      const lyrics = Array.from(cloneDoc.querySelectorAll('lyric'));
+      const verseCount = Math.min(99, Math.max(1, ...lyrics.map(lyric => Number(lyric.getAttribute('number') || '1')).filter(Number.isFinite)));
+      lyrics.filter(lyric => lyric.getAttribute('name') === 'ĐK' && lyric.getAttribute('number') === '1').forEach(lyric => {
+        for (let number = 2; number <= verseCount; number++) {
+          if (lyric.parentElement?.querySelector(`lyric[number="${number}"]`)) continue;
+          const copy = lyric.cloneNode(true) as Element;
+          copy.setAttribute('number', String(number));
+          lyric.parentElement?.appendChild(copy);
+        }
+      });
+    }
+    return new XMLSerializer().serializeToString(cloneDoc);
+  }
+
   /**
    * Dịch chuyển hợp âm đơn lẻ theo số bán âm
    */
@@ -817,11 +830,12 @@ export class MusicXmlEngine {
    * Version 3: Xuất bản Hợp Âm Chuẩn (HopAmChuan / Lead Sheet Text)
    */
   public generateHopAmChuanText(transposeSemitones: number = 0, style: 'inline' | 'above' = 'above'): string {
-    const meta = this.getMetadata();
+    const meta = this.extractMetadata();
     const title = meta.title || 'BẢN NHẠC';
     const composer = meta.composer ? `Sáng tác: ${meta.composer}` : '';
-    const key = this.getKeySignature();
-    const time = this.getTimeSignature();
+    const key = meta.keySig;
+    const [beats, beatType] = meta.timeSig.split('/').map(Number);
+    const time = { beats, beatType };
 
     const harmonies = this.extractHarmonies();
     const lyricsMap = this.extractLyrics();
@@ -909,10 +923,11 @@ export class MusicXmlEngine {
    * Version 3: Xuất định dạng ChordPro chuẩn quốc tế (.cho / .pro)
    */
   public generateChordProText(transposeSemitones: number = 0): string {
-    const meta = this.getMetadata();
+    const meta = this.extractMetadata();
     const title = meta.title || 'Bản Nhạc';
-    const key = this.formatTransposedChord(this.getKeySignature(), transposeSemitones);
-    const time = this.getTimeSignature();
+    const key = this.formatTransposedChord(meta.keySig, transposeSemitones);
+    const [beats, beatType] = meta.timeSig.split('/').map(Number);
+    const time = { beats, beatType };
 
     let pro = `{title: ${title}}\n`;
     if (meta.composer) pro += `{composer: ${meta.composer}}\n`;
@@ -930,10 +945,10 @@ export class MusicXmlEngine {
    * Tự động phân tích các nốt trong ô nhịp và gợi ý hợp âm chuẩn theo nhạc lý
    */
   public suggestChordForMeasure(measureNumber: number): string {
-    const notes = this.extractMeasureNotes(measureNumber);
+    const notes = this.getNotesInMeasure(measureNumber);
     if (notes.length === 0) return '';
 
-    const key = this.getKeySignature();
+    const key = this.extractMetadata().keySig;
     const isMinorKey = key.includes('minor') || key.includes('m');
 
     // Đếm trọng số các nốt trong ô nhịp (nốt đầu phách và nốt dài có trọng số lớn hơn)
@@ -1018,7 +1033,8 @@ export class MusicXmlEngine {
     const firstMeasure = this.doc.querySelector('measure[number="1"]');
     if (!firstMeasure) return false;
 
-    const time = this.getTimeSignature();
+    const [beats, beatType] = this.extractMetadata().timeSig.split('/').map(Number);
+    const time = { beats, beatType };
     const nominalUnits = time.beats * 4; // Assuming division 4
 
     let totalDuration = 0;

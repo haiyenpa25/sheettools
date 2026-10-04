@@ -3,11 +3,29 @@
 > **Dự án:** Sheet Converter  
 > **Kiến trúc:** Clean MVC + Domain-Driven Services + Worker Pipeline + Component-based Frontend  
 > **Tiêu chuẩn:** Zero-server Code Intelligence & Comprehensive Graph Index  
-> **Trạng thái:** Toàn bộ 7 Phases (Phase 0 -> Phase 6) đã hoàn thành và kiểm thử thành công.
+> **Trạng thái:** Pipeline Roadmap 1 đã có triển khai và regression tests; nghiệm thu accuracy/P4 cần ground truth. Xem `ROADMAP1_IMPLEMENTATION.md` để biết phạm vi và giới hạn hiện tại.
 
 ---
 
 ## 1. SƠ ĐỒ KIẾN TRÚC TOÀN DIỆN (FULL SYSTEM ARCHITECTURE GRAPH)
+
+## Roadmap 1 registry (2026-10-04)
+
+- `preprocessing/page_layout.py::PageLayoutAnalyzer`: nguồn geometry duy nhất trong pipeline OCR. Schema v2, interline median, system grouping bằng barline hoặc gap fallback, các band và separator trắng. Giữ trường v1 cho API regions cũ.
+- `xml_tools/vi_lexicon.py`: cache từ điển NFC/casefold, chỉ dùng phân loại; không thay chữ OCR bằng từ điển.
+- `xml_tools/text_roles.py`: grammar hợp âm chung với document header, ưu tiên band, clustering dòng theo chiều cao.
+- `xml_tools/syllable_geometry.py`: crop → chiếu nét chữ → khoảng trắng → hộp âm tiết; không đủ khoảng trắng thì fallback có cờ cần soát.
+- `xml_tools/document_layout.py`: metadata v2, tựa nhiều dòng và creator/tempo/key/note riêng. `vietnamese_universal_ocr.py` dùng page model, giữ chữ đơn mơ hồ, tạo mask lớp qua `notation_layers.py`.
+- `xml_tools/omr_anchors.py::OmrAnchorReader`: chỉ nhận schema Audiveris 5.11.0 đã kiểm tra trên `.omr` thật. Book logical part → measure/voice/slot → containment → head bounds; kiểm định count trước khi map; lỗi map ghi musicxml_fallback.
+- `xml_tools/chord_alignment.py`: grammar → kind/bass/degrees → pixel/onset → harmony offset; chỉ sửa dẫn xuất, không dùng harmony từ dual full-image.
+- `xml_tools/lyrics_aligner.py`: pixel DP v2 + slur extensions. Legacy v1 vẫn phục vụ artifact cũ; pipeline có anchor JSON không trộn pixel/tenths. Token geometry fallback và confidence thấp ở JSON review.
+- `xml_tools/lyric_structure.py::LyricStructureAnalyzer`: marker + row offsets + Viterbi hệ/measure, verse/chorus/coda/intro; `detect_poem_stanzas`, `project_stanzas`, `structure_tree` tạo lyrics v2. Chỉ stanza đủ khớp/confidence mới chèn, không ép số âm tiết lệch.
+- `audiveris_runner.py`: source → preprocess → shared page_model + OCR roles + layer masks → Audiveris RAW/.omr → note_anchors → metadata/chords/sections → notation.musicxml → accepted lyrics → score.musicxml. Checkpoint gắn `pipeline_version=roadmap1_v1`, không tái dùng kết quả thuật toán cũ.
+- `resources/js/Services/LyricStructureService.ts` + `Components/LyricSections.vue`: tải API lyrics artifact và xem section/verse/review trong Editor. Nút Vai trò chữ dùng ảnh overlay backend thật, không tạo vùng giả.
+- `ExportService::export(..., duplicateChorus)` và `MusicXmlEngine::getFullXml()`: mặc định ĐK 1 dòng, tuỳ chọn nhân bản vào mọi verse trên bản clone. `ExportModal.vue` cung cấp checkbox. Vue shim và tham chiếu method đã sửa để TypeScript strict check chạy được.
+- `evaluation/roadmap_benchmark.py`: manifest verified → metric theo commit + source hash; không có ground truth thì accuracy_available=false. Fixture `.omr` không phải ground truth. `tests/ground_truth` chỉ chứa template/hướng dẫn.
+- Regression runner hiện **43/43 suites**; fixtures Audiveris 5.11 dùng hai source PDF khác nhau. Test SATB/stanza/section giữa hệ hiện dùng ảnh/dữ liệu tổng hợp; còn cần mẫu thật. Chi tiết kết quả và giới hạn tại `ROADMAP1_IMPLEMENTATION.md`.
+
 
 ## Current verification note (2026-09-24)
 

@@ -67,6 +67,9 @@ def build_notation_layer(
         py1 = max(0, box[1] - padding)
         px2 = min(width, box[2] + padding)
         py2 = min(height, box[3] + padding)
+        if _overlaps_band([px1, py1, px2, py2], bands):
+            protected.append(item)
+            continue
         mask[py1:py2, px1:px2] = 255
         removed.append(item)
 
@@ -79,3 +82,23 @@ def build_notation_layer(
         "removed_boxes": removed,
         "protected_boxes": protected,
     }
+
+
+def build_notation_layers(image: np.ndarray, groups: dict[str, list[dict]],
+                          staves: list[list[float]], padding: int = 2) -> dict[str, Any]:
+    """Keep independent masks, then white-fill their deterministic union."""
+    masks = {}
+    removed, protected = [], []
+    for role, boxes in groups.items():
+        layer = build_notation_layer(image, boxes, staves, padding)
+        masks[role] = layer['text_mask']
+        removed.extend(layer['removed_boxes'])
+        protected.extend(layer['protected_boxes'])
+    union = np.zeros(image.shape[:2], dtype=np.uint8)
+    for mask in masks.values():
+        union = cv2.bitwise_or(union, mask)
+    notation = image.copy()
+    notation[union > 0] = 255
+    return {'notation_image': notation, 'text_mask': union, 'masks': masks,
+            'removed_boxes': removed, 'protected_boxes': protected,
+            'protected_bands': _protected_bands(staves, image.shape[0])}

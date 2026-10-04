@@ -46,6 +46,11 @@ def _validate_structure(root, result):
     lyric_state = {}
     for node in root.iter():
         name = _local(node)
+        if name == 'note':
+            numbers = [lyric.get('number', '1') for lyric in _children(node, 'lyric')]
+            if len(numbers) != len(set(numbers)):
+                result['issues'].append({'type': 'lyric', 'kind': 'duplicate_lyric_number', 'severity': 'error'})
+                result['isValid'] = False
         if name == 'harmony':
             root_node = next((child for child in node.iter() if _local(child) == 'root-step'), None)
             kind_node = next((child for child in node if _local(child) == 'kind'), None)

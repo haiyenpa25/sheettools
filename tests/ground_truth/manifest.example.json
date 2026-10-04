@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "samples": [
+    {
+      "id": "example-001",
+      "verified": false,
+      "stratum": "clean_scan_single_staff_chords",
+      "source": "example-001/source.pdf",
+      "truth_musicxml": "example-001/truth.musicxml",
+      "truth_document": "example-001/truth_document.json",
+      "truth_sections": "example-001/truth_sections.json",
+      "truth_page_model": "example-001/truth_page_model.json",
+      "prediction_musicxml": "example-001/prediction/score.musicxml",
+      "prediction_document": "example-001/prediction/document.json",
+      "prediction_lyrics": "example-001/prediction/lyrics.json",
+      "prediction_page_model": "example-001/prediction/page_model.json"
+    }
+  ]
+}
