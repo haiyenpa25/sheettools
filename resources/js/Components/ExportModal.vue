@@ -99,15 +99,15 @@
             </button>
 
             <button
-              @click="downloadFull('mscx')"
+              @click="downloadFull('xml')"
               class="text-left p-3.5 border border-border-subtle rounded-xl hover:border-primary hover:bg-primary/5 transition-all flex items-center gap-3 group"
             >
               <div class="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center font-mono font-bold text-xs group-hover:bg-primary group-hover:text-on-primary transition-colors">
-                MS
+                XML
               </div>
               <div class="flex-1 min-w-0">
-                <div class="text-sm font-bold text-on-surface">.mscx</div>
-                <p class="text-xs text-secondary truncate">Mở trực tiếp trong MuseScore 4</p>
+                <div class="text-sm font-bold text-on-surface">.xml</div>
+                <p class="text-xs text-secondary truncate">MusicXML không nén</p>
               </div>
             </button>
 
@@ -219,6 +219,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { MusicXmlEngine } from '../Services/MusicXmlEngine';
+import { createScoreDownload } from '../Services/MusicXmlExportService';
 
 const props = defineProps<{
   projectTitle: string;
@@ -245,8 +246,8 @@ const lyricsOnlyPreview = computed(() => {
     .join('\n\n');
 });
 
-function triggerDownload(content: string, filename: string, mimeType: string) {
-  const blob = new Blob([content], { type: mimeType });
+function triggerDownload(content: string | Blob, filename: string, mimeType: string) {
+  const blob = content instanceof Blob ? content : new Blob([content], { type: mimeType });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -262,14 +263,16 @@ function getCleanName(suffix: string = ''): string {
   return suffix ? `${base}_${suffix}` : base;
 }
 
-function downloadFull(format: string) {
-  triggerDownload(engine.value.getFullXml(duplicateChorus.value), `${getCleanName()}.${format}`, 'application/vnd.recordare.musicxml+xml;charset=utf-8');
+async function downloadFull(format: string) {
+  const blob = await createScoreDownload(engine.value.getFullXml(duplicateChorus.value), format);
+  triggerDownload(blob, `${getCleanName()}.${format}`, blob.type);
   emit('close');
 }
 
-function downloadInstrumental(format: string) {
+async function downloadInstrumental(format: string) {
   const instXml = engine.value.getInstrumentalXml();
-  triggerDownload(instXml, `${getCleanName('instrumental')}.${format}`, 'application/vnd.recordare.musicxml+xml;charset=utf-8');
+  const blob = await createScoreDownload(instXml, format);
+  triggerDownload(blob, `${getCleanName('instrumental')}.${format}`, blob.type);
   emit('close');
 }
 

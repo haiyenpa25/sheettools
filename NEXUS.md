@@ -11,6 +11,10 @@
 
 ## Roadmap 1 registry (2026-10-04)
 
+- Audit thực tế 270: `tests/ground_truth/270.manual.json` (hash nguồn, 210 âm tiết đọc từ ảnh, hai ô triplet và hợp âm chọn lọc) → `tests/manual/audit_270.py` → JSON WER/lỗi cụ thể. Báo cáo `QA_270_2026-10-04.md`; test code đạt không đồng nghĩa chất lượng OMR đạt.
+- `xml_tools/page_merger.py`: tiếp tục số ô từ số cuối trang đầu (hỗ trợ pickup 0); pipeline giữ title nhận dạng khi ghép. `MultiPageMergerTest` + `PageWorkerRetryTest` bao phủ hai lỗi này.
+- `resources/js/Services/MusicXmlExportService.ts`: XML editor → XML Blob hoặc ZIP MXL thật qua JSZip; `ExportModal.vue` dùng chung cho bản full/notation. `tests/Frontend/MusicXmlExportTest.mjs` kiểm container và nội dung round trip; không hỗ trợ đổi đuôi XML thành MSCX.
+
 - `preprocessing/page_layout.py::PageLayoutAnalyzer`: nguồn geometry duy nhất trong pipeline OCR. Schema v2, interline median, system grouping bằng barline hoặc gap fallback, các band và separator trắng. Giữ trường v1 cho API regions cũ.
 - `xml_tools/vi_lexicon.py`: cache từ điển NFC/casefold, chỉ dùng phân loại; không thay chữ OCR bằng từ điển.
 - `xml_tools/text_roles.py`: grammar hợp âm chung với document header, ưu tiên band, clustering dòng theo chiều cao.

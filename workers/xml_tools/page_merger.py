@@ -39,6 +39,14 @@ def _definitions(root):
     return {item.get("id"): item for item in _children(part_list, "score-part") if item.get("id")}
 
 
+def _last_measure_number(part) -> int:
+    measures = _children(part, 'measure')
+    try:
+        return int(measures[-1].get('number')) if measures else 0
+    except (TypeError, ValueError):
+        return len(measures)
+
+
 def merge_musicxml_pages(xml_files: list[str], output_file: str, title: str | None = None) -> bool:
     """Merge pages without converting their musical content through another model."""
     if not xml_files or any(not os.path.isfile(path) for path in xml_files):
@@ -58,7 +66,7 @@ def merge_musicxml_pages(xml_files: list[str], output_file: str, title: str | No
         merged_tree = copy.deepcopy(trees[0])
         merged_root = merged_tree.getroot()
         merged_parts = {part.get("id"): part for part in _children(merged_root, "part") if part.get("id")}
-        counters = {part_id: len(_children(part, "measure")) for part_id, part in merged_parts.items()}
+        counters = {part_id: _last_measure_number(part) for part_id, part in merged_parts.items()}
         merged_part_list = _first(merged_root, "part-list")
 
         if title:

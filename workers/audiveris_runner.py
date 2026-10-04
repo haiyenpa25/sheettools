@@ -484,7 +484,7 @@ def process(
             if not merge_musicxml_pages(raw_pages, merged_raw, "Merged Audiveris score"):
                 return {"success": False, "error": "Could not merge raw MusicXML pages", "xml_path": None}
             if include_lyrics:
-                if not merge_musicxml_pages(enriched_pages, merged_enriched, "Merged score with lyrics"):
+                if not merge_musicxml_pages(enriched_pages, merged_enriched, None):
                     return {"success": False, "error": "Could not merge lyric MusicXML pages", "xml_path": None}
             else:
                 write_notation_only(merged_raw, merged_enriched, Path(input_path).stem)

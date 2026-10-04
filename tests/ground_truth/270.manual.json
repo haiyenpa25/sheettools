@@ -1,0 +1,19 @@
+{
+  "source_sha256": "68735aad8563c376cee765421eb36ac9a816ca62735373d268b2f3aecd2b59d5",
+  "review_method": "Transcribed by visual comparison with the two source page images; lyrics ignore case/punctuation but preserve all Vietnamese marks. Note ground truth covers only measures 3 and 5.",
+  "page1_verses": {
+    "1": "Tôi không biết ngày mai sẽ thế nào tôi chỉ sống với mỗi một ngày Tôi không mơ ánh mặt trời sáng ngời nơi trời ấy đổi thay nào hay Tôi không lo tương lai sẽ ra gì Tôi đã nghe tiếng Chúa tỏ tường Tôi đang đi bên Giê xu giờ này Vì Ngài biết trước mỗi một đường",
+    "2": "Mỗi bước đi càng tươi sáng hơn nhiều nghe dường như bước nơi Thiên đình Trên vai tôi bao gánh nặng vơi dần mây mờ biến tươi hơn đẹp hơn Tại nơi đó mặt trời sáng soi hoài không còn tiếng khóc than đêm ngày Muôn vinh quang bao quanh tôi không rời thành tín Chúa mãi theo tôi hoài",
+    "3": "Tôi không biết ngày mai sẽ thế nào hoặc nghèo khổ hay luôn no lành Nhưng chim kia Chúa đêm ngày dắt dìu tôi Ngài há quên không đỡ nâng Đường tôi đi dầu gặp lắm nguy nan qua lửa luôn hay mưa ngập tràn nhưng Giê xu có trước tôi mọi đường và dấu kín mãi trong an lành"
+  },
+  "page1_chorus": "Tương lai tôi còn có bao nhiêu",
+  "page2_chorus": "điều tôi không hề lắng lo làm sao Bởi tôi biết Đấng nắm tương lai mình và tôi biết Ngài đang dắt chân",
+  "page1_notes": {
+    "3": [["G", 0, 4, "2"], ["B", -1, 4, "2/3"], ["A", 0, 4, "2/3"], ["G", 0, 4, "2/3"]],
+    "5": [["B", -1, 4, "3/2"], ["B", -1, 4, "1/2"], ["A", 0, 4, "2/3"], ["G", 0, 4, "2/3"], ["B", -1, 4, "2/3"]]
+  },
+  "page2_chords": {
+    "2": [["E", -1, "major"], ["C", 0, "major"]],
+    "5": [["E", -1, "major"], ["E", -1, "minor"]]
+  }
+}

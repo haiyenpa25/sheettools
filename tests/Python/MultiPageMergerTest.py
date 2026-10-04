@@ -42,6 +42,21 @@ with tempfile.TemporaryDirectory() as directory:
         require(len(part.xpath(".//*[local-name()='voice']")) == 4, "voices must survive")
         require(len(part.xpath(".//*[local-name()='lyric']")) == 4, "lyrics must survive")
 
+    pickup_root = etree.fromstring(page(1).encode())
+    work = etree.Element('work')
+    etree.SubElement(work, 'work-title').text = 'TÔI BIẾT ĐẤNG NẮM GIỮ TƯƠNG LAI'
+    pickup_root.insert(0, work)
+    for part in pickup_root.findall('part'):
+        for number, measure in enumerate(part.findall('measure')):
+            measure.set('number', str(number))
+    page1.write_bytes(etree.tostring(pickup_root))
+    require(merge_musicxml_pages([str(page1), str(page2)], str(output)), 'pickup merge must succeed')
+    pickup_merged = etree.parse(str(output)).getroot()
+    require(pickup_merged.findtext('work/work-title') == work.findtext('work-title'), 'score title must survive')
+    for part in pickup_merged.findall('part'):
+        require([m.get('number') for m in part.findall('measure')] == ['0', '1', '2', '3'],
+                'a pickup measure numbered zero must not cause a skipped measure at the next page')
+
     checkpoint = folder / "page_checkpoint.json"
     _save_page_checkpoint(str(checkpoint), {
         "success": True,
