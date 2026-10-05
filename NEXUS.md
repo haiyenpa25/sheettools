@@ -1,5 +1,17 @@
 # GITNEXUS CODEBASE KNOWLEDGE GRAPH & ARCHITECTURE REGISTRY
 
+## Neural OMR comparison increment (2026-10-05)
+
+- `OmrComparisonService` queues allowlisted Homr/Clarity jobs and resolves comparison artifacts. API `/api/conversions/{uuid}/omr-comparisons` (GET/POST) and `/{run}/pages/{page}/{artifact}` (GET) use existing project/auth boundaries.
+- `workers/external_omr/worker.py::ComparisonWorker`: immutable rendered pages → isolated pinned CPU engine → per-run MusicXML, source hashes, staff regions, overlays and logs. Atomic job claims, subprocess timeout, explicit failure/restart handling; canonical source/RAW/current/.omr are not written. Homr attention coordinates remain approximate.
+- `workers/external_omr/layout.py`: neural staff boxes + RapidOCR detected text rows → row grouping and Vietnamese whole-line fusion → tight lyric boxes and unverified monotonic alignment proposals. Staff-local OCR avoids reducing a whole A4 page. Unknown text, overlap, standalone poem ambiguity and approximate matches remain reviewable.
+- `workers/external_omr/postprocess.py`: app OCR runtime processes completed comparison runs, writes `analysis.json`, `lyrics.json`, `aligned.musicxml`, updated overlays; restarted processing resumes. These generated lyrics are separate from the canonical OCR artifact.
+- Compose profile `neural-omr`: Homr and Clarity sidecars (UID 33, no Docker socket) plus `comparison-analysis`. Separate images avoid Python package conflicts; Homr models are included in its image. Source commits and runtime dependency snapshots are recorded.
+- `omr_checks/repair.py::homr_candidate`: source-page hash + physical measure coordinates + image pitch/quarter-tuplet timing + lyric counts + exact divisions gate a Homr repair candidate. No measure-number offset assumption. `ReviewQueueService::requestRepair(..., engine)` exposes it; human application still checks current XML revision. Other music remains unverified.
+- `OmrComparisonPanel.vue` in `MeasureReviewQueue.vue`: queue/status, region overlay, downloadable artifacts, side-by-side OSMD preview. `Phương án Homr` loads a bounded candidate into the existing review workflow.
+- Tests: `ExternalOmrTest.py`, `HomrRepairTest.py`, `OmrComparisonServiceTest.php`; reproducible real-data tools `tests/manual/prepare_omr_comparison.php`, `tests/manual/audit_external_270.py`. Actual results and limitations: `NEURAL_OMR_EVALUATION.md`. Integration tests do not certify recognition accuracy.
+- Recorded benchmark evidence: `tests/evaluation_results/neural_omr_2026-10-05.json` contains bounded note comparisons, lyric OCR edit distances and immutable artifact hashes.
+
 > **Dự án:** Sheet Converter  
 > **Kiến trúc:** Clean MVC + Domain-Driven Services + Worker Pipeline + Component-based Frontend  
 > **Tiêu chuẩn:** Zero-server Code Intelligence & Comprehensive Graph Index  

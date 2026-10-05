@@ -1,0 +1,413 @@
+{
+    "date":  "2026-10-05",
+    "scope":  "Three sample scores; hand-verified note accuracy limited to two measures of 270",
+    "homr":  {
+                 "engine":  "homr",
+                 "revision":  "560ca5ce254db129b1b2167598bdc7a20ac5d6b0",
+                 "scope":  "Only two manually transcribed measures; no whole-score accuracy",
+                 "source_sha256":  "68735aad8563c376cee765421eb36ac9a816ca62735373d268b2f3aecd2b59d5",
+                 "checks":  [
+                                {
+                                    "measure":  "3",
+                                    "expected":  [
+                                                     [
+                                                         "G",
+                                                         0,
+                                                         4,
+                                                         "2"
+                                                     ],
+                                                     [
+                                                         "B",
+                                                         -1,
+                                                         4,
+                                                         "2/3"
+                                                     ],
+                                                     [
+                                                         "A",
+                                                         0,
+                                                         4,
+                                                         "2/3"
+                                                     ],
+                                                     [
+                                                         "G",
+                                                         0,
+                                                         4,
+                                                         "2/3"
+                                                     ]
+                                                 ],
+                                    "actual":  [
+                                                   [
+                                                       "G",
+                                                       0,
+                                                       4,
+                                                       "2"
+                                                   ],
+                                                   [
+                                                       "B",
+                                                       -1,
+                                                       4,
+                                                       "2/3"
+                                                   ],
+                                                   [
+                                                       "A",
+                                                       0,
+                                                       4,
+                                                       "2/3"
+                                                   ],
+                                                   [
+                                                       "G",
+                                                       0,
+                                                       4,
+                                                       "2/3"
+                                                   ]
+                                               ],
+                                    "matches":  true,
+                                    "mapping":  "Approximate Homr coordinates inside existing verified measure boxes"
+                                },
+                                {
+                                    "measure":  "5",
+                                    "expected":  [
+                                                     [
+                                                         "B",
+                                                         -1,
+                                                         4,
+                                                         "3/2"
+                                                     ],
+                                                     [
+                                                         "B",
+                                                         -1,
+                                                         4,
+                                                         "1/2"
+                                                     ],
+                                                     [
+                                                         "A",
+                                                         0,
+                                                         4,
+                                                         "2/3"
+                                                     ],
+                                                     [
+                                                         "G",
+                                                         0,
+                                                         4,
+                                                         "2/3"
+                                                     ],
+                                                     [
+                                                         "B",
+                                                         -1,
+                                                         4,
+                                                         "2/3"
+                                                     ]
+                                                 ],
+                                    "actual":  [
+                                                   [
+                                                       "B",
+                                                       -1,
+                                                       4,
+                                                       "3/2"
+                                                   ],
+                                                   [
+                                                       "B",
+                                                       -1,
+                                                       4,
+                                                       "1/2"
+                                                   ],
+                                                   [
+                                                       "A",
+                                                       0,
+                                                       4,
+                                                       "2/3"
+                                                   ],
+                                                   [
+                                                       "G",
+                                                       0,
+                                                       4,
+                                                       "2/3"
+                                                   ],
+                                                   [
+                                                       "B",
+                                                       -1,
+                                                       4,
+                                                       "2/3"
+                                                   ]
+                                               ],
+                                    "matches":  true,
+                                    "mapping":  "Approximate Homr coordinates inside existing verified measure boxes"
+                                }
+                            ],
+                 "full_accuracy_available":  false,
+                 "counts":  [
+                                {
+                                    "page":  1,
+                                    "summary":  {
+                                                    "parts":  1,
+                                                    "measures":  18,
+                                                    "pitched_notes":  67,
+                                                    "rests":  5,
+                                                    "tuplets":  21,
+                                                    "accuracy_available":  false
+                                                },
+                                    "xml":  "page.musicxml",
+                                    "staff_regions":  6,
+                                    "source_sha256":  "96bc4b66c8b2f8ca3752b6f3ca4852e1b14f640dbd0828c68b898f66ab1d31f8"
+                                },
+                                {
+                                    "page":  2,
+                                    "summary":  {
+                                                    "parts":  1,
+                                                    "measures":  7,
+                                                    "pitched_notes":  23,
+                                                    "rests":  1,
+                                                    "tuplets":  9,
+                                                    "accuracy_available":  false
+                                                },
+                                    "xml":  "page.musicxml",
+                                    "staff_regions":  2,
+                                    "source_sha256":  "d31698772283d78cbc62ac66439797300cc2b310d3b8f66b10be265e4222a3ad"
+                                }
+                            ],
+                 "ocr_lyrics":  {
+                                    "page1_row1":  {
+                                                       "reference_syllables":  60,
+                                                       "output_syllables":  60,
+                                                       "edit_errors":  0,
+                                                       "word_error_rate":  0.0,
+                                                       "output_text":  "Tôi không biết ngày mai sẽ thế nào, tôi chỉ? sống với mỗi một ngày. Tôi không mơ ánh mặt trời sáng ngời nơi trời ấy đổi thay nào hay! Tôi không lo tương lai sẽ ra gì. Tôi đã nghe tiếng Chúa tỏ tường. Tôi đang đi bên Giê xu giờ này. Vì Ngài biết trước mỗi một đường."
+                                                   },
+                                    "page1_row2":  {
+                                                       "reference_syllables":  67,
+                                                       "output_syllables":  68,
+                                                       "edit_errors":  3,
+                                                       "word_error_rate":  0.0448,
+                                                       "output_text":  "Mỗi bước đi càng tươi sáng hơn nhiều, nghe dường như bước nơi Thiên đình. Trên vai tôi bao gánh nặng vơi dần, mây mò biến tươi hơn đẹp hơn. Tại nơi đó mặt trời s sáng soi hoài, không còn tiếng khóc than đêm ngày. Muôn vinh quang bao quanh tôi không rời, thành tín Chúa mãi theo tôi hoài. Tương lai tôi còn có bao nhiều"
+                                                   },
+                                    "page1_row3":  {
+                                                       "reference_syllables":  60,
+                                                       "output_syllables":  61,
+                                                       "edit_errors":  5,
+                                                       "word_error_rate":  0.0833,
+                                                       "output_text":  "Tôi không biết ngày mai sẽ thế nào, hoạc nghèo khổ hay luôn no lành. Nhưng chỉm kia Chúa đêm ngày dắt dìu, tôi Ngài há quê n không đỡ nâng? Đường tôi đi dầu gặp lắm nguy nan, qua lửa luôn hay mưa ngập tràn; nhưng Giê xu cô trước tôi mọi đường, và dấu kín mãi trong an lành."
+                                                   },
+                                    "page2_chorus":  {
+                                                         "reference_syllables":  23,
+                                                         "output_syllables":  23,
+                                                         "edit_errors":  2,
+                                                         "word_error_rate":  0.087,
+                                                         "output_text":  "điều, tôi không hể lắng lo làm sao. Bởi tôi biết Đấng nắm tương lai mình, và tôi biết Ngài đang dắt chăn."
+                                                     }
+                                }
+             },
+    "clarity":  {
+                    "engine":  "clarity",
+                    "revision":  "c6bb8a4d2a5b52842a9c41bd0f761f58d02f6f82",
+                    "scope":  "Only two manually transcribed measures; no whole-score accuracy",
+                    "source_sha256":  "68735aad8563c376cee765421eb36ac9a816ca62735373d268b2f3aecd2b59d5",
+                    "checks":  [
+                                   {
+                                       "measure":  "3",
+                                       "expected":  [
+                                                        [
+                                                            "G",
+                                                            0,
+                                                            4,
+                                                            "2"
+                                                        ],
+                                                        [
+                                                            "B",
+                                                            -1,
+                                                            4,
+                                                            "2/3"
+                                                        ],
+                                                        [
+                                                            "A",
+                                                            0,
+                                                            4,
+                                                            "2/3"
+                                                        ],
+                                                        [
+                                                            "G",
+                                                            0,
+                                                            4,
+                                                            "2/3"
+                                                        ]
+                                                    ],
+                                       "actual":  [
+                                                      [
+                                                          "G",
+                                                          0,
+                                                          4,
+                                                          "2"
+                                                      ],
+                                                      [
+                                                          "B",
+                                                          -1,
+                                                          4,
+                                                          "1"
+                                                      ],
+                                                      [
+                                                          "A",
+                                                          0,
+                                                          4,
+                                                          "1/2"
+                                                      ],
+                                                      [
+                                                          "G",
+                                                          0,
+                                                          4,
+                                                          "1/2"
+                                                      ]
+                                                  ],
+                                       "matches":  false,
+                                       "mapping":  "Single-part score with identical per-system measure counts in the verified image ledger and Clarity assembly"
+                                   },
+                                   {
+                                       "measure":  "5",
+                                       "expected":  [
+                                                        [
+                                                            "B",
+                                                            -1,
+                                                            4,
+                                                            "3/2"
+                                                        ],
+                                                        [
+                                                            "B",
+                                                            -1,
+                                                            4,
+                                                            "1/2"
+                                                        ],
+                                                        [
+                                                            "A",
+                                                            0,
+                                                            4,
+                                                            "2/3"
+                                                        ],
+                                                        [
+                                                            "G",
+                                                            0,
+                                                            4,
+                                                            "2/3"
+                                                        ],
+                                                        [
+                                                            "B",
+                                                            -1,
+                                                            4,
+                                                            "2/3"
+                                                        ]
+                                                    ],
+                                       "actual":  [
+                                                      [
+                                                          "B",
+                                                          -1,
+                                                          4,
+                                                          "3/2"
+                                                      ],
+                                                      [
+                                                          "B",
+                                                          -1,
+                                                          4,
+                                                          "1/2"
+                                                      ],
+                                                      [
+                                                          "A",
+                                                          0,
+                                                          4,
+                                                          "1"
+                                                      ],
+                                                      [
+                                                          "G",
+                                                          0,
+                                                          4,
+                                                          "1"
+                                                      ]
+                                                  ],
+                                       "matches":  false,
+                                       "mapping":  "Single-part score with identical per-system measure counts in the verified image ledger and Clarity assembly"
+                                   }
+                               ],
+                    "full_accuracy_available":  false,
+                    "counts":  [
+                                   {
+                                       "page":  1,
+                                       "summary":  {
+                                                       "parts":  1,
+                                                       "measures":  18,
+                                                       "pitched_notes":  63,
+                                                       "rests":  6,
+                                                       "tuplets":  0,
+                                                       "accuracy_available":  false
+                                                   },
+                                       "xml":  "score.musicxml",
+                                       "staff_regions":  6,
+                                       "source_sha256":  "96bc4b66c8b2f8ca3752b6f3ca4852e1b14f640dbd0828c68b898f66ab1d31f8"
+                                   },
+                                   {
+                                       "page":  2,
+                                       "summary":  {
+                                                       "parts":  1,
+                                                       "measures":  7,
+                                                       "pitched_notes":  23,
+                                                       "rests":  1,
+                                                       "tuplets":  0,
+                                                       "accuracy_available":  false
+                                                   },
+                                       "xml":  "score.musicxml",
+                                       "staff_regions":  2,
+                                       "source_sha256":  "d31698772283d78cbc62ac66439797300cc2b310d3b8f66b10be265e4222a3ad"
+                                   }
+                               ],
+                    "ocr_lyrics":  {
+                                       "page1_row1":  {
+                                                          "reference_syllables":  60,
+                                                          "output_syllables":  62,
+                                                          "edit_errors":  2,
+                                                          "word_error_rate":  0.0333,
+                                                          "output_text":  "Tôi không biết ngày mai sẽ thế nào, tôi chỉ? sống với r mỗi n một ngày. Tôi không mơ ánh mặt trời sáng ngời nơi trời ấy đổi thay nào hay! Tôi không lo tương lai sẽ ra gì. Tôi đã nghe tiếng Chúa tỏ tường. Tôi đang đi bên Giê xu giờ này. Vì Ngài biết trước mỗi một đường."
+                                                      },
+                                       "page1_row2":  {
+                                                          "reference_syllables":  67,
+                                                          "output_syllables":  67,
+                                                          "edit_errors":  2,
+                                                          "word_error_rate":  0.0299,
+                                                          "output_text":  "Mỗi bước đi càng tươi sáng hơn nhiều, nghe dường như bước nơi Thiên đình. Trên vai tôi bao gánh nặng vơi dần, mây mò biến tươi hơn đẹp hơn. Tại nơi đó mặt trời sáng soi hoài, không còn tiếng khóc than đêm ngày. Muôn vinh quang bao quanh tôi không rời, thành tín Chúa mãi theo tôi hoài. Tương lai tôi còn có bao nhiều"
+                                                      },
+                                       "page1_row3":  {
+                                                          "reference_syllables":  60,
+                                                          "output_syllables":  62,
+                                                          "edit_errors":  5,
+                                                          "word_error_rate":  0.0833,
+                                                          "output_text":  "Tôi không biết ngày mai sẽ thế nào, hoạc nghèo khổ hay lu luôn no lành. Nhưng c chỉm kia Chúa đêm ngày dắt dìu, tôi Ngài há quên không đỡ nâng? Đường tôi đi dầu gặp lắm nguy nan, qua lửa luôn hay mưa ngập tràn; nhưng Giê xu cô trước tôi mọi đường, và dấu kín mãi trong an lành."
+                                                      },
+                                       "page2_chorus":  {
+                                                            "reference_syllables":  23,
+                                                            "output_syllables":  23,
+                                                            "edit_errors":  2,
+                                                            "word_error_rate":  0.087,
+                                                            "output_text":  "điều, tôi không hể lắng lo làm sao. Bởi tôi biết Đấng nắm tương lai mình, và tôi biết Ngài đang dắt chăn."
+                                                        }
+                                   }
+                },
+    "immutability":  {
+                         "value":  [
+                                       {
+                                           "file":  "source/original.pdf",
+                                           "unchanged":  true,
+                                           "sha256":  "68735aad8563c376cee765421eb36ac9a816ca62735373d268b2f3aecd2b59d5"
+                                       },
+                                       {
+                                           "file":  "musicxml/raw.musicxml",
+                                           "unchanged":  true,
+                                           "sha256":  "f112061ba13ce071e221209056affb67d8acd217b11138a2ab9a3909c7386f1e"
+                                       },
+                                       {
+                                           "file":  "musicxml/current.musicxml",
+                                           "unchanged":  true,
+                                           "sha256":  "5b8ffd75666675d0b5ce87e4325eac57c6f2772fa667128ccb4cf3a0e9e6334a"
+                                       },
+                                       {
+                                           "file":  "omr/source.omr",
+                                           "unchanged":  true,
+                                           "sha256":  "1fc62cea07dcd9dc2018031063a47097480082c8e61c8f7f0c96008c5c46a573"
+                                       }
+                                   ],
+                         "Count":  4
+                     }
+}

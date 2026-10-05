@@ -9,6 +9,7 @@
         </header>
         <p v-if="error" class="text-warning" role="alert">{{ error }} <button @click="load" class="underline">Tải lại</button> · <button :disabled="busy" @click="buildQueue" class="underline">Tạo dữ liệu soát từ kết quả có sẵn</button></p>
         <p v-if="busy" class="text-secondary">Đang tải…</p>
+        <OmrComparisonPanel :uuid="props.uuid" />
         <template v-if="current">
           <p class="text-sm text-secondary">Trạng thái: {{ current.review_status || 'open' }} · Phần máy đánh dấu cần được người xác nhận.</p>
           <div class="grid md:grid-cols-2 gap-4">
@@ -26,7 +27,8 @@
             <button @click="move(-1)" class="p-2 border border-border-subtle rounded">← Trước</button>
             <button :disabled="busy" @click="act(current.kind === 'metadata' ? 'metadata' : 'accept')" class="p-2 bg-primary text-on-primary rounded">Enter · {{ current.kind === 'metadata' ? 'Lưu thông tin' : 'Xác nhận đúng' }}</button>
             <button :disabled="busy || current.kind === 'metadata'" @click="edit" class="p-2 border border-border-subtle rounded">E · Sửa tay</button>
-            <button :disabled="busy || current.kind === 'metadata'" @click="repair" class="p-2 border border-border-subtle rounded">Đọc lại hệ 2×</button>
+            <button :disabled="busy || current.kind === 'metadata'" @click="repair('audiveris')" class="p-2 border border-border-subtle rounded">Đọc lại hệ 2×</button>
+            <button :disabled="busy || current.kind === 'metadata'" @click="repair('homr')" class="p-2 border border-border-subtle rounded">Phương án Homr</button>
             <button :disabled="busy" @click="act('skip')" class="p-2 border border-border-subtle rounded">N · Để sau</button>
             <button :disabled="busy" @click="act('reject')" class="p-2 border border-error text-error rounded">Đánh dấu sai</button>
             <button :disabled="busy" @click="act('undo')" class="p-2 border border-border-subtle rounded">Hoàn tác sửa gần nhất</button>
@@ -40,6 +42,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue';
 import { OpenSheetMusicDisplay } from 'opensheetmusicdisplay';
+import OmrComparisonPanel from './OmrComparisonPanel.vue';
 import { loadReviewQueue, recordReview, measureXml, type ReviewQueue } from '../Services/MeasureReviewService';
 const props = defineProps<{ uuid: string; xml: string }>();
 const emit = defineEmits<{ (e:'close'):void; (e:'edit',number:number):void; (e:'updated',xml:string):void }>();
@@ -87,9 +90,9 @@ async function act(action:string,suggestion_id?:string) {
     if(action!=='undo') index.value=Math.min(queue.value.items.length-1,index.value+1);
   } catch(e) { error.value=String(e); } finally { busy.value=false; await render(); }
 }
-async function repair() {
+async function repair(engine = 'audiveris') {
   if(!current.value||busy.value) return; busy.value=true; error.value='';
-  try { const r=await fetch(`/api/conversions/${props.uuid}/review/${current.value.id}/repair`,{method:'POST'}); const data=await r.json(); if(!r.ok) throw new Error(data.message); queue.value=data; }
+  try { const r=await fetch(`/api/conversions/${props.uuid}/review/${current.value.id}/repair?engine=${engine}`,{method:'POST'}); const data=await r.json(); if(!r.ok) throw new Error(data.message); queue.value=data; }
   catch(e) { error.value=String(e); } finally { busy.value=false; started=performance.now(); }
 }
 function keyboard(e:KeyboardEvent) {

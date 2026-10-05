@@ -74,6 +74,56 @@ services:
       retries: 3
       start_period: 10s
 
+  homr:
+    profiles: [neural-omr]
+    user: "33:33"
+    build:
+      context: .
+      dockerfile: docker/omr-homr.Dockerfile
+    image: sheettools-homr:local
+    restart: unless-stopped
+    volumes:
+      - sheettools-storage:/var/www/html/storage
+    deploy:
+      resources:
+        limits:
+          memory: 6G
+
+  comparison-analysis:
+    profiles: [neural-omr]
+    image: sheettools:local
+    user: "33:33"
+    restart: unless-stopped
+    entrypoint: []
+    healthcheck:
+      disable: true
+    command: ["/opt/venv/bin/python", "workers/external_omr/postprocess.py"]
+    environment:
+      HOME: /var/www/html/storage/cache/runtime-home
+      TESSDATA_PREFIX: /usr/share/tesseract-ocr/5/tessdata
+      OMP_NUM_THREADS: "2"
+    volumes:
+      - sheettools-storage:/var/www/html/storage
+    deploy:
+      resources:
+        limits:
+          memory: 3G
+
+  clarity:
+    profiles: [neural-omr]
+    user: "33:33"
+    build:
+      context: .
+      dockerfile: docker/omr-clarity.Dockerfile
+    image: sheettools-clarity:local
+    restart: unless-stopped
+    volumes:
+      - sheettools-storage:/var/www/html/storage
+    deploy:
+      resources:
+        limits:
+          memory: 6G
+
 volumes:
   sheettools-storage:
     name: sheettools-storage

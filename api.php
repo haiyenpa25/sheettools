@@ -27,6 +27,7 @@ use App\Services\ExportService;
 use App\Services\JobQueueService;
 use App\Services\PageArtifactService;
 use App\Services\ReviewQueueService;
+use App\Services\OmrComparisonService;
 use App\Services\BookProfileService;
 use App\DTOs\LyricDto;
 use App\DTOs\NoteEditDto;
@@ -233,6 +234,24 @@ if (preg_match('#^/api/conversions/([a-zA-Z0-9_\-]+)(/.*)?$#', $uri, $matches)) 
         }
     }
 
+    if ($subPath === '/omr-comparisons' && in_array($method,['GET','POST'],true)) {
+        try {
+            $service=new OmrComparisonService($storageService);
+            if($method==='GET') jsonResponse($service->list($uuid));
+            $input=json_decode(file_get_contents('php://input'),true)?:[];
+            if(!is_string($input['engine']??null)) throw new InvalidArgumentException('Engine is required');
+            jsonResponse($service->enqueue($uuid,$input['engine']),202);
+        } catch(InvalidArgumentException $e) { jsonResponse(['message'=>$e->getMessage()],422); }
+        catch(RuntimeException $e) { jsonResponse(['message'=>$e->getMessage()],409); }
+    }
+    if(preg_match('#^/omr-comparisons/([a-f0-9]{24})/pages/(\d+)/([a-z_.]+)$#',$subPath,$comparisonMatch)&&$method==='GET') {
+        try {
+            $path=(new OmrComparisonService($storageService))->artifact($uuid,$comparisonMatch[1],(int)$comparisonMatch[2],$comparisonMatch[3]);
+            $ext=pathinfo($path,PATHINFO_EXTENSION);
+            header('Content-Type: '.match($ext){'png'=>'image/png','json'=>'application/json','musicxml'=>'application/vnd.recordare.musicxml+xml',default=>'text/plain; charset=utf-8'});
+            header('X-Content-Type-Options: nosniff'); readfile($path); exit;
+        } catch(InvalidArgumentException|RuntimeException $e) { jsonResponse(['message'=>$e->getMessage()],404); }
+    }
     if ($subPath === '/review-queue/build' && $method === 'POST') {
         try { jsonResponse((new ReviewQueueService($storageService))->buildQueue($uuid)); }
         catch (\RuntimeException $e) { jsonResponse(['error'=>'REVIEW_BUILD_FAILED','message'=>$e->getMessage()],409); }
@@ -242,7 +261,9 @@ if (preg_match('#^/api/conversions/([a-zA-Z0-9_\-]+)(/.*)?$#', $uri, $matches)) 
         catch (RuntimeException $e) { jsonResponse(['error'=>'REVIEW_NOT_READY','message'=>$e->getMessage()],409); }
     }
     if (preg_match('#^/review/([a-zA-Z0-9_-]+)/repair$#', $subPath, $reviewMatch) && $method === 'POST') {
-        try { jsonResponse((new ReviewQueueService($storageService))->requestRepair($uuid,$reviewMatch[1])); }
+        $repairEngine=$_GET['engine']??'audiveris';
+        if(!is_string($repairEngine)) jsonResponse(['message'=>'Invalid repair engine'],422);
+        try { jsonResponse((new ReviewQueueService($storageService))->requestRepair($uuid,$reviewMatch[1],$repairEngine)); }
         catch (InvalidArgumentException $e) { jsonResponse(['error'=>'INVALID_REVIEW','message'=>$e->getMessage()],422); }
         catch (RuntimeException $e) { jsonResponse(['error'=>'REPAIR_FAILED','message'=>$e->getMessage()],409); }
     }

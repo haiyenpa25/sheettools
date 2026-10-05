@@ -15,6 +15,8 @@ mkdir -p \
   /var/www/html/storage/jobs/completed \
   /var/www/html/storage/jobs/failed
 
+mkdir -p /var/www/html/storage/omr_jobs/homr /var/www/html/storage/omr_jobs/clarity
+
 chown -R www-data:www-data /var/www/html/storage
 
 exec "$@"

@@ -128,17 +128,18 @@ final class ReviewQueueService
         } finally { flock($lock,LOCK_UN); fclose($lock); }
         return $this->getQueue($uuid,($input['all']??false)===true);
     }
-    public function requestRepair(string $uuid,string $id): array {
+    public function requestRepair(string $uuid,string $id,string $engine='audiveris'): array {
+        if(!in_array($engine,['audiveris','homr'],true)) throw new \InvalidArgumentException('Unsupported repair engine');
         $queue=$this->getQueue($uuid,true); $found=false;
         foreach($queue['items'] as $item) if($item['id']===$id && ($item['kind']??'')!=='metadata') $found=true;
         if(!$found) throw new \InvalidArgumentException('Unknown measure id');
         $python=getenv('PYTHON_BIN')?:'python'; $worker=dirname(__DIR__,2).'/workers/omr_checks/repair.py';
-        $command=escapeshellarg($python).' '.escapeshellarg($worker).' --project '.escapeshellarg($this->storage->getProjectDir($uuid)).' --measure-id '.escapeshellarg($id).' 2>&1';
+        $command=escapeshellarg($python).' '.escapeshellarg($worker).' --project '.escapeshellarg($this->storage->getProjectDir($uuid)).' --measure-id '.escapeshellarg($id).' --engine '.escapeshellarg($engine).' 2>&1';
         $output=[]; $exit=0;
         $lock=fopen($this->directory($uuid).'/review_state.lock','c+'); flock($lock,LOCK_EX);
         try { exec($command,$output,$exit); } finally { flock($lock,LOCK_UN); fclose($lock); }
         file_put_contents($this->directory($uuid).'/repair.log',implode("\n",$output));
-        if($exit!==0) throw new \RuntimeException('Crop reread failed; see repair log');
+        if($exit!==0) throw new \RuntimeException($engine==='homr'?'Chưa có phương án Homr khớp ô này. Chạy đối chiếu Homr trước; xem repair.log để biết chi tiết.':'Crop reread failed; see repair log');
         return $this->getQueue($uuid);
     }
     public function buildQueue(string $uuid): array {

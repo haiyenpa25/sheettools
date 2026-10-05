@@ -37,8 +37,96 @@ def reconcile_tuplet(entry: dict, candidate: ET.Element, divisions: int) -> bool
         if i in (indexes[0],indexes[-1]):
             notation=note.find('notations')
             if notation is None: notation=ET.SubElement(note,'notations')
+            for old in notation.findall('tuplet'): notation.remove(old)
             ET.SubElement(notation,'tuplet',{'type':'start' if i==indexes[0] else 'stop','number':'1',**({'bracket':'yes'} if i==indexes[0] else {})})
     return abs(_beats(candidate,divisions)-float(entry['evidence']['omr']['expected_beats']))<.001
+
+
+def homr_candidate(project: Path, entry: dict) -> dict | None:
+    """A Homr measure is applicable only with matching image pitch/timing/lyric evidence."""
+    import hashlib
+    from external_omr.worker import score_root
+    from omr_checks.ledger import _beats
+    page=entry['page']; pages=sorted((project/'pages').glob('page-*.png')) or sorted((project/'pages').glob('page_*.png'))
+    if page>len(pages): return None
+    page_hash=hashlib.sha256(pages[page-1].read_bytes()).hexdigest()
+    runs=[]
+    for status_path in (project/'omr_comparisons').glob('*/status.json'):
+        status=json.loads(status_path.read_text())
+        if status.get('engine')=='homr' and status.get('status')=='completed':
+            record=next((p for p in status.get('pages',[]) if p['page']==page and p.get('source_sha256')==page_hash),None)
+            if record: runs.append((status.get('finished_at',0),status_path.parent,record))
+    if not runs: return None
+    _,directory,record=max(runs,key=lambda r:r[0]); base=directory/f'page_{page:04d}'
+    positions=json.loads((base/'note_positions.json').read_text())['positions']
+    x1,_,x2,_=entry['box']; lines=entry['staff_lines']; il=entry['interline']
+    selected=[p for p in positions if x1<=p['position'][0]<x2 and lines[0]-2*il<=p['position'][1]<=lines[-1]+2*il]
+    keys={p['id'].rsplit(':',1)[0] for p in selected}
+    if len(keys)!=1: return None
+    key=next(iter(keys)); root=score_root(base/record['xml']); source=None; divisions=1
+    for part in root.findall('part'):
+        divisions=1
+        for measure in part.findall('measure'):
+            divisions=int(measure.findtext('attributes/divisions',str(divisions)))
+            if f"{part.get('id')}:{measure.get('number')}"==key: source=measure; break
+        if source is not None: break
+    if source is None: return None
+    candidate=copy.deepcopy(source); notes=candidate.findall('note')
+    ids={p['id'] for p in selected}; prefix=key+':'
+    if len(notes)!=len(ids) or any(prefix+str(i+1) not in ids or n.find('pitch') is None or n.find('chord') is not None for i,n in enumerate(notes)): return None
+    # This bounded acceptance gate covers printed quarter tuplets, not arbitrary music.
+    reconciled=copy.deepcopy(candidate)
+    agrees=reconcile_tuplet(entry,reconciled,divisions)
+    timing_same=[n.findtext('duration') for n in notes]==[n.findtext('duration') for n in reconciled.findall('note')]
+    expected=entry['evidence']['omr'].get('expected_beats') or 0
+    verified=agrees and timing_same and len(notes)==entry['evidence']['image'].get('heads') and abs(_beats(candidate,divisions)-expected)<.001
+    if agrees and timing_same: candidate=reconciled; notes=candidate.findall('note')
+    artifact_base=project/'omr_out'/f'page_result_{page:04d}'
+    if not artifact_base.is_dir(): artifact_base=project/'omr_out'
+    lyric_path=artifact_base/'lyrics.json'
+    words=json.loads(lyric_path.read_text())['words'] if lyric_path.exists() else []
+    words=[w for w in words if w.get('staff_index')==entry['staff_index'] and x1<=w['x']<x2]
+    verses=sorted({w['verse_number'] for w in words})
+    counts=entry['evidence'].get('lyrics',{})
+    verified=verified and bool(verses) and all(counts.get(str(v))==len(notes) for v in verses)
+    for note in notes:
+        for old in note.findall('lyric'): note.remove(old)
+        # Normalize the derived pitch child order; Homr raw output stays intact.
+        pitch=note.find('pitch')
+        if pitch is not None:
+            for child in sorted(list(pitch),key=lambda n:{'step':0,'alter':1,'octave':2}.get(n.tag,3)):
+                pitch.remove(child); pitch.append(child)
+    for verse in verses:
+        row=sorted((w for w in words if w['verse_number']==verse),key=lambda w:w['x'])
+        if len(row)!=len(notes): verified=False; continue
+        for note,word in zip(notes,row):
+            lyric=ET.SubElement(note,'lyric',{'number':str(verse),'name':word.get('lyric_name',f'Lời {verse}')})
+            ET.SubElement(lyric,'text').text=word['text']
+    current_path=project/'musicxml/current.musicxml'; current=ET.parse(current_path).getroot()
+    target=None; current_divisions=1
+    for part in current.findall('part'):
+        if part.get('id')!=entry['part_id']: continue
+        for measure in part.findall('measure'):
+            current_divisions=int(measure.findtext('attributes/divisions',str(current_divisions)))
+            if measure.get('number')==str(entry['measure_number']): target=measure; break
+    if target is None: verified=False
+    else:
+        for duration in candidate.findall('.//duration'):
+            value=Fraction(int(duration.text),divisions)*current_divisions
+            if value.denominator!=1: verified=False
+            else: duration.text=str(value.numerator)
+        for node in list(candidate):
+            if node.tag in ('attributes','harmony','print','direction'): candidate.remove(node)
+        for node in reversed([n for n in target if n.tag in ('attributes','harmony','print','direction')]): candidate.insert(0,copy.deepcopy(node))
+    order={name:i for i,name in enumerate(['grace','chord','pitch','rest','unpitched','duration','tie','instrument',
+        'footnote','level','voice','type','dot','accidental','time-modification','stem','notehead','notehead-text','staff','beam','notations','lyric','play','listen'])}
+    for note in candidate.findall('note'):
+        for child in sorted(list(note),key=lambda n:order.get(n.tag,100)):
+            note.remove(child); note.append(child)
+    return {'id':entry['id']+'_homr','source':'homr','summary':f'Homr: {len(notes)} nốt; đối chiếu ảnh và lời',
+            'verified':bool(verified),'measure_xml':ET.tostring(candidate,encoding='unicode'),
+            'satisfies':['C1','C2','C3','C4'] if verified else [],'source_artifact':str(base/record['xml']),
+            'requires_human_confirmation':True,'xml_sha256':hashlib.sha256(current_path.read_bytes()).hexdigest()}
 
 
 def image_proposal(entry: dict) -> dict | None:
@@ -139,11 +227,16 @@ def reread_system(project: Path, entry: dict, scale: float = 2.0) -> dict:
 
 
 if __name__=='__main__':
-    p=argparse.ArgumentParser(description=__doc__); p.add_argument('--project',required=True); p.add_argument('--measure-id',required=True); a=p.parse_args()
+    p=argparse.ArgumentParser(description=__doc__); p.add_argument('--project',required=True); p.add_argument('--measure-id',required=True)
+    p.add_argument('--engine',choices=['audiveris','homr'],default='audiveris'); a=p.parse_args()
     project=Path(a.project).resolve(); ledger_path=project/'omr_out/measure_ledger.json'; ledger=json.loads(ledger_path.read_text(encoding='utf-8'))
     entry=next(m for m in ledger['measures'] if m['id']==a.measure_id)
     before_hash=__import__('hashlib').sha256((project/'musicxml/current.musicxml').read_bytes()).hexdigest()
-    suggestions=[s for s in [image_proposal(entry),reread_system(project,entry)] if s]
+    if a.engine=='homr':
+        candidate=homr_candidate(project,entry)
+        if candidate is None: raise RuntimeError('Run Homr comparison first; no matching measure found')
+        suggestions=[s for s in entry.get('suggestions',[]) if s.get('source')!='homr']+[candidate]
+    else: suggestions=[s for s in [image_proposal(entry),reread_system(project,entry),homr_candidate(project,entry)] if s]
     entry['suggestions']=suggestions
     if __import__('hashlib').sha256((project/'musicxml/current.musicxml').read_bytes()).hexdigest()!=before_hash:
         raise RuntimeError('Current XML changed while rereading; discard this candidate')
